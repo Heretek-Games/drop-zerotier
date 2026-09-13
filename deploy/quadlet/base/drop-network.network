@@ -1,0 +1,6 @@
+[Network]
+NetworkName=drop-network
+Driver=bridge
+Subnet=172.20.0.0/16
+Subnet=fd00:172:20::/64
+IPv6=true

@@ -1,0 +1,22 @@
+[Unit]
+Description=Drop PostgreSQL Database
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=drop-postgres
+Image=docker.io/postgres:14-alpine
+AutoUpdate=registry
+Network=drop-network.network
+IP=172.20.0.21
+Volume=drop-db.volume:/var/lib/postgresql/data
+EnvironmentFile=%E/containers/systemd/drop.env
+Environment=POSTGRES_DB=drop
+Environment=HOSTNAME=drop-postgres
+SecurityLabelDisable=true
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

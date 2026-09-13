@@ -1,0 +1,12 @@
+{
+  "name": "drop-zerotier",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ZeroTier & ZTNET mesh network orchestration for the Drop gaming platform",
+  "scripts": {
+    "bootstrap": "node scripts/ztnet-bootstrap.mjs"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.0"
+  }
+}

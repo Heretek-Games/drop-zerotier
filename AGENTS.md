@@ -72,6 +72,5 @@ npm run validate
 npm run pack
 ```
 
-The SDK is linked from `../drop-plugin-sdk/packages/plugin-sdk` via `file:`
-dependencies while the `system:command` capability is unreleased; switch those
-to `^0.3.0` once the SDK is published.
+The addons depend on the published `@droposs/plugin-sdk@^0.3.0`, which adds the
+`system:command` capability used by the client addon.

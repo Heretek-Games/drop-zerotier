@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@drop/zerotier-mesh": "0.3.0",
-    "@droposs/plugin-sdk": "file:../../../drop-plugin-sdk/packages/plugin-sdk"
+    "@droposs/plugin-sdk": "^0.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

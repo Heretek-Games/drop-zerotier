@@ -20,7 +20,7 @@
     "pack": "drop-plugin pack plugin-bundle dist-packages"
   },
   "devDependencies": {
-    "@droposs/plugin-cli": "^0.3.0",
+    "@droposs/plugin-cli": "^0.4.0",
     "@types/node": "^22.0.0",
     "prettier": "^3.5.0",
     "typescript": "^5.7.2"

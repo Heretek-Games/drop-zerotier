@@ -26,6 +26,25 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
+      # CI checks out only this repo, so the lockfile must resolve the SDK from
+      # the registry. A linked "../drop-plugin-sdk" entry creates a dangling
+      # symlink and tsc fails with TS2307 across the addons.
+      - name: Verify @droposs/plugin-sdk resolves from the npm registry
+        run: |
+          npm ls @droposs/plugin-sdk --workspaces
+          node -e '
+          const { readFileSync } = require("node:fs");
+          const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+          const entry = lock.packages["node_modules/@droposs/plugin-sdk"];
+          if (!entry) throw new Error("@droposs/plugin-sdk is missing from package-lock.json");
+          if (entry.link === true) throw new Error("@droposs/plugin-sdk is a linked local package in package-lock.json");
+          if (!entry.resolved || !entry.resolved.startsWith("https://registry.npmjs.org/")) {
+            throw new Error("@droposs/plugin-sdk does not resolve to the npm registry: " + entry.resolved);
+          }
+          if (!entry.integrity) throw new Error("@droposs/plugin-sdk lock entry has no integrity hash");
+          console.log("@droposs/plugin-sdk@" + entry.version + " -> " + entry.resolved);
+          '
+
       # mesh-core must be built first: the addons import its emitted types.
       - run: npm run build -w @heretek-games/zerotier-mesh
       - run: npm run build

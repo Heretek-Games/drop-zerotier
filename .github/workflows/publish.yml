@@ -27,10 +27,10 @@ jobs:
           # into .npmrc, which disables OIDC trusted publishing.
 
       - name: Upgrade npm for Trusted Publishing (needs >= 11.5.1)
-        run: npm install -g npm@11.5.1
+        run: npm install -g npm@11.5.1 --ignore-scripts
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build @heretek-games/zerotier-mesh
         run: npm run build -w @heretek-games/zerotier-mesh

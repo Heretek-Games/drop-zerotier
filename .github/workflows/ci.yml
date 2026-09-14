@@ -24,7 +24,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       # mesh-core must be built first: the addons import its emitted types.
       - run: npm run build -w @heretek-games/zerotier-mesh

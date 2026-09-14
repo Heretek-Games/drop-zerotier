@@ -9,12 +9,12 @@ import {
 
 export type BackendName = "ztnet" | "zerotier" | "tailscale" | "memory";
 
-const KNOWN_BACKENDS: BackendName[] = [
+const KNOWN_BACKENDS = new Set<BackendName>([
   "ztnet",
   "zerotier",
   "tailscale",
   "memory",
-];
+]);
 
 /**
  * Select the mesh backend from `MESH_BACKEND` (explicit) or auto-detect from
@@ -30,7 +30,7 @@ export function resolveBackend(
   if (selected === "memory") {
     return new InMemoryMeshBackend();
   }
-  if (selected && !KNOWN_BACKENDS.includes(selected as BackendName)) {
+  if (selected && !KNOWN_BACKENDS.has(selected as BackendName)) {
     throw new Error(
       `unknown MESH_BACKEND '${selected}' (expected ztnet, zerotier, tailscale or memory)`,
     );

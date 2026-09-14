@@ -1,11 +1,23 @@
 {
-  "name": "@drop/zerotier-mesh",
+  "name": "@heretek-games/zerotier-mesh",
   "version": "0.3.0",
   "description": "Transport-only mesh backends (ZTNET, ZeroTier, Tailscale) for Drop",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Heretek-Games/drop-zerotier.git",
+    "directory": "packages/mesh-core"
+  },
+  "homepage": "https://github.com/Heretek-Games/drop-zerotier#readme",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

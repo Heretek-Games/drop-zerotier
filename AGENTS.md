@@ -8,7 +8,7 @@ lifecycles for multiplayer lobbies and joins desktop clients to them.
 
 ## 1. Architecture
 
-- **`packages/mesh-core/`** (`@drop/zerotier-mesh`, TypeScript): transport-only
+- **`packages/mesh-core/`** (`@heretek-games/zerotier-mesh`, TypeScript): transport-only
   `MeshBackend` implementations (`ZtnetBackend`, `ZeroTierBackend`,
   `TailscaleBackend`, `InMemoryMeshBackend`) plus deterministic `/24` address
   allocation. **Consumed in-process** by `drop-gse` and the server addon — this
@@ -27,7 +27,7 @@ lifecycles for multiplayer lobbies and joins desktop clients to them.
 
 ### Cross-repo contract
 
-- `drop-gse` depends on `@drop/zerotier-mesh` (not a duplicate copy) for mesh
+- `drop-gse` depends on `@heretek-games/zerotier-mesh` (not a duplicate copy) for mesh
   backends. The mesh is owned here; `drop-gse` keeps only rooms/emulator logic.
 - Backend selection and membership changes are transport details behind
   `MeshBackend`; do not leak them into consumers.
@@ -60,7 +60,7 @@ lifecycles for multiplayer lobbies and joins desktop clients to them.
 npm install
 
 # Build mesh-core first (addons import its emitted types)
-npm run build -w @drop/zerotier-mesh
+npm run build -w @heretek-games/zerotier-mesh
 npm run build
 
 # Unit tests (mesh-core, addon-server, addon-client)

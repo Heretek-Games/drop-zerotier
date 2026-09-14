@@ -23,7 +23,7 @@ not bundle or host a controller.
 
 | Package | Purpose |
 | :--- | :--- |
-| `packages/mesh-core/` (`@drop/zerotier-mesh`) | Transport-only `MeshBackend` implementations: `ZtnetBackend`, `ZeroTierBackend`, `TailscaleBackend`, `InMemoryMeshBackend`, plus deterministic address allocation. Consumed in-process by `drop-gse` and the server addon. |
+| `packages/mesh-core/` (`@heretek-games/zerotier-mesh`) | Transport-only `MeshBackend` implementations: `ZtnetBackend`, `ZeroTierBackend`, `TailscaleBackend`, `InMemoryMeshBackend`, plus deterministic address allocation. Consumed in-process by `drop-gse` and the server addon. |
 | `packages/addon-server/` | Drop server plugin: network lifecycle, membership, REST routes, WebSocket channel and event-bus coordination. |
 | `packages/addon-client/` | Drop desktop client addon: `pre-launch:network` / `post-exit:cleanup` hooks that join/leave ZeroTier networks. |
 | `plugin-bundle/` | Assembled `drop-plugin.json` + signed server/client bundles (`.dropplugin`). |

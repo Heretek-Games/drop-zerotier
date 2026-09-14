@@ -1,0 +1,43 @@
+name: Publish mesh package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # Required for npm Trusted Publishing via OIDC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Must match the "Environment" configured on the npm Trusted Publisher.
+    environment: Heretek-Games
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # No registry-url: setup-node would write a placeholder _authToken
+          # into .npmrc, which disables OIDC trusted publishing.
+
+      - name: Upgrade npm for Trusted Publishing (needs >= 11.5.1)
+        run: npm install -g npm@11.5.1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build @heretek-games/zerotier-mesh
+        run: npm run build -w @heretek-games/zerotier-mesh
+
+      - name: Run tests
+        run: npm test -w @heretek-games/zerotier-mesh
+
+      - name: Publish @heretek-games/zerotier-mesh
+        working-directory: packages/mesh-core
+        run: npm publish --access public --provenance

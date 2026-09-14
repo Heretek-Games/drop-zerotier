@@ -3,7 +3,7 @@ import {
   isPublicMeshInfo,
   type MeshBackend,
   type PublicMeshInfo,
-} from "@drop/zerotier-mesh";
+} from "@heretek-games/zerotier-mesh";
 
 /** Default network lifetime (4 hours). */
 export const NETWORK_TTL_MS = 4 * 60 * 60 * 1000;
@@ -184,6 +184,9 @@ export class NetworkStore {
     userId: string,
     nodeId: string,
   ): Promise<NetworkMember> {
+    // Self-heal: the network may not be provisioned yet if the client reported
+    // its node before the async `mesh:member-join` handler finished.
+    await this.ensure(key);
     return this.withLock(async () => {
       const state = await this.load();
       const network = this.liveNetwork(state, key);

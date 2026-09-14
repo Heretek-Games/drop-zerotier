@@ -4,8 +4,8 @@ import type {
   PluginMetadata,
   ServerPlugin,
 } from "@droposs/plugin-sdk";
-import type { MeshBackend } from "@drop/zerotier-mesh";
-import { isMeshMemberId } from "@drop/zerotier-mesh";
+import type { MeshBackend } from "@heretek-games/zerotier-mesh";
+import { isMeshMemberId } from "@heretek-games/zerotier-mesh";
 import { resolveBackend } from "./backend.js";
 import {
   NETWORK_TTL_MS,
@@ -29,6 +29,7 @@ const PRUNE_INTERVAL_MS = 60_000;
 /** Event bus channels used for cross-plugin mesh coordination. */
 export const MESH_EVENT_MEMBER_JOIN = "mesh:member-join";
 export const MESH_EVENT_MEMBER_LEAVE = "mesh:member-leave";
+export const MESH_EVENT_NETWORK_CLOSE = "mesh:network-close";
 export const MESH_EVENT_NETWORK = "mesh:network";
 export const MESH_EVENT_MEMBER = "mesh:member";
 
@@ -154,6 +155,23 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
           ctx.logger.warn(
             `Failed to remove mesh member: ${String(err)}`,
           );
+        });
+    });
+
+    // A consumer (e.g. drop-gse) signals the lobby/network is finished.
+    ctx.subscribe(MESH_EVENT_NETWORK_CLOSE, (payload) => {
+      const data = (payload ?? {}) as { key?: unknown };
+      if (typeof data.key !== "string" || data.key.length === 0) return;
+      void this.store
+        .teardown(data.key)
+        .then(() => {
+          ctx.broadcast(MESH_EVENT_NETWORK, {
+            type: "network_closed",
+            key: data.key,
+          });
+        })
+        .catch((err) => {
+          ctx.logger.warn(`Failed to tear down mesh network: ${String(err)}`);
         });
     });
 

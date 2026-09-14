@@ -4,7 +4,7 @@ import {
   InMemoryMeshBackend,
   networkCidr,
   type MeshBackend,
-} from "@drop/zerotier-mesh";
+} from "@heretek-games/zerotier-mesh";
 import {
   MockPluginContext,
   MockPluginStorage,
@@ -145,5 +145,28 @@ test("plugin reacts to mesh:member-join events from consumers", async () => {
     { params: {}, query: {}, userId: "user-9" },
   )) as { networks: Array<{ key: string }> };
   assert.deepEqual(active.networks.map((n) => n.key), ["room-gse"]);
+  plugin.teardown();
+});
+
+test("plugin tears a network down on mesh:network-close", async () => {
+  const plugin = new DropZeroTierServerPlugin(
+    undefined,
+    new InMemoryMeshBackend(),
+  );
+  const ctx = new MockPluginContext("drop-zerotier");
+  plugin.init(ctx);
+
+  ctx.broadcast("mesh:member-join", { key: "room-close", userId: "user-1" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  ctx.broadcast("mesh:network-close", { key: "room-close" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const activeRoute = ctx.routes.get("GET /networks/active");
+  const active = (await activeRoute!.handler(
+    {},
+    { params: {}, query: {}, userId: "user-1" },
+  )) as { networks: Array<{ key: string }> };
+  assert.deepEqual(active.networks, []);
   plugin.teardown();
 });

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, test & bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # mesh-core must be built first: the addons import its emitted types.
+      - run: npm run build -w @heretek-games/zerotier-mesh
+      - run: npm run build
+      - run: npm test
+
+      - run: npm run bundle:build
+      - run: npm run validate
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: drop-zerotier-plugin
+          path: plugin-bundle/
+          if-no-files-found: error

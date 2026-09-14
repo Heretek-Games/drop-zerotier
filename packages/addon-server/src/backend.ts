@@ -5,7 +5,7 @@ import {
   ZeroTierBackend,
   ZtnetBackend,
   type MeshBackend,
-} from "@drop/zerotier-mesh";
+} from "@heretek-games/zerotier-mesh";
 
 export type BackendName = "ztnet" | "zerotier" | "tailscale" | "memory";
 

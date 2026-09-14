@@ -4,13 +4,13 @@
 
 ## Quick Reference
 
-- **Mesh core**: `packages/mesh-core/` (`@drop/zerotier-mesh`)
+- **Mesh core**: `packages/mesh-core/` (`@heretek-games/zerotier-mesh`)
 - **Server addon**: `packages/addon-server/`
 - **Client addon**: `packages/addon-client/`
 - **Deployment**: `deploy/quadlet/` (base Drop stack; BYO ZTNET controller)
 
 ```bash
-npm install && npm run build -w @drop/zerotier-mesh && npm run build
+npm install && npm run build -w @heretek-games/zerotier-mesh && npm run build
 npm test
 npm run bundle:build && npm run validate && npm run pack
 ```

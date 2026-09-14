@@ -84,19 +84,33 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
     );
   }
 
+  /**
+   * List the user's active networks, retrying briefly: a just-created lobby may
+   * still be provisioning on a consumer's `mesh:member-join` event.
+   */
   private async activeNetworks(
     ctx: ClientPluginContext,
+    attempts = 3,
   ): Promise<NetworkView[]> {
-    try {
-      const res = await ctx.serverRequest<{ networks: NetworkView[] }>(
-        "GET",
-        "/networks/active",
-      );
-      return res?.networks ?? [];
-    } catch (err) {
-      ctx.logger.warn(`Failed to list active mesh networks: ${String(err)}`);
-      return [];
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const res = await ctx.serverRequest<{ networks: NetworkView[] }>(
+          "GET",
+          "/networks/active",
+        );
+        const networks = res?.networks ?? [];
+        if (networks.length > 0 || attempt === attempts - 1) return networks;
+      } catch (err) {
+        if (attempt === attempts - 1) {
+          ctx.logger.warn(
+            `Failed to list active mesh networks: ${String(err)}`,
+          );
+          return [];
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
+    return [];
   }
 
   /** Join every active ZeroTier network and report this node's id. */

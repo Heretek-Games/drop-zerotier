@@ -49,6 +49,7 @@ jobs:
       - run: npm run build -w @heretek-games/zerotier-mesh
       - run: npm run build
       - run: npm test
+      - run: npm run lint
 
       - run: npm run bundle:build
       - run: npm run validate

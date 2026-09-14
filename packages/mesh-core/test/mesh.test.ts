@@ -5,6 +5,7 @@ import {
   InMemoryMeshBackend,
   TailscaleApiProvisioner,
   TailscaleBackend,
+  ZeroTierBackend,
   allocateMemberAddress,
   networkCidr,
   type FetchLike,
@@ -273,4 +274,43 @@ test("Tailscale credential expiry follows the configured key TTL", async () => {
   assert.ok(credential.expiresAt);
   assert.ok(credential.expiresAt! >= before + 120_000);
   assert.ok(credential.expiresAt! <= after + 120_000);
+});
+
+test("ZeroTierBackend member authorize/revoke use the /controller path", async () => {
+  const calls: string[] = [];
+  const fetchImpl: FetchLike = async (url, init) => {
+    calls.push(`${init?.method ?? "GET"} ${url}`);
+    if (init?.method === "POST" && /______$/.test(url)) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "8056c2e21c000001" }),
+        text: async () => "",
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ assignedAddresses: ["10.242.1.20/24"] }),
+      text: async () => "",
+    };
+  };
+
+  const backend = new ZeroTierBackend({
+    baseUrl: "http://localhost:9993",
+    authToken: "authtoken",
+    controllerNodeId: "abcdef0123",
+    fetchImpl,
+  });
+
+  const mesh = await backend.provision("room-1", 1234);
+  await backend.authorizeMember("room-1", "user-1", "member-1", mesh);
+  await backend.revokeMember("room-1", "user-1", mesh, "member-1");
+
+  assert.ok(
+    calls.includes(
+      "POST http://localhost:9993/controller/network/8056c2e21c000001/member/member-1",
+    ),
+    `expected /controller member path; got:\n${calls.join("\n")}`,
+  );
 });

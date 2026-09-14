@@ -6,7 +6,7 @@ import {
   type MeshBackend,
 } from "@heretek-games/zerotier-mesh";
 import { MockPluginContext, MockPluginStorage } from "@droposs/plugin-sdk";
-import { DropZeroTierServerPlugin } from "../src/index.js";
+import { DropZeroTierServerPlugin, resolveBackend } from "../src/index.js";
 import { NetworkStore } from "../src/network-store.js";
 
 function makeStore(backend: MeshBackend = new InMemoryMeshBackend()) {
@@ -192,6 +192,53 @@ test("NetworkStore activeForUser does not re-provision expired networks", async 
   // Expired network is not re-provisioned
   const fetched = await store.get("expiring-room");
   assert.equal(fetched, undefined);
+});
+
+test("resolveBackend applies MESH_HTTP_TIMEOUT_MS and rejects invalid values", () => {
+  const backend = resolveBackend({
+    MESH_BACKEND: "ztnet",
+    ZTNET_URL: "https://ztnet.example.com",
+    ZTNET_TOKEN: "token",
+    ZTNET_ORG: "org-1",
+    MESH_HTTP_TIMEOUT_MS: "5000",
+  });
+  assert.equal(backend.id, "zerotier");
+
+  const zeroTimeout = resolveBackend({
+    MESH_BACKEND: "tailscale",
+    TAILSCALE_API_KEY: "key",
+    TAILSCALE_TAILNET: "example.com",
+    MESH_HTTP_TIMEOUT_MS: "0",
+    TAILSCALE_KEY_EXPIRY_SECONDS: "900",
+  });
+  assert.equal(zeroTimeout.id, "tailscale");
+
+  assert.throws(
+    () =>
+      resolveBackend({
+        MESH_BACKEND: "tailscale",
+        TAILSCALE_API_KEY: "key",
+        TAILSCALE_TAILNET: "example.com",
+        TAILSCALE_KEY_EXPIRY_SECONDS: "0",
+      }),
+    /TAILSCALE_KEY_EXPIRY_SECONDS/,
+  );
+
+  const ztnetEnv = {
+    MESH_BACKEND: "ztnet",
+    ZTNET_URL: "https://ztnet.example.com",
+    ZTNET_TOKEN: "token",
+    ZTNET_ORG: "org-1",
+  };
+  assert.throws(
+    () => resolveBackend({ ...ztnetEnv, MESH_HTTP_TIMEOUT_MS: "soon" }),
+    /MESH_HTTP_TIMEOUT_MS/,
+  );
+
+  assert.throws(
+    () => resolveBackend({ ...ztnetEnv, MESH_HTTP_TIMEOUT_MS: "-1" }),
+    /MESH_HTTP_TIMEOUT_MS/,
+  );
 });
 
 test("plugin enforces auth on GET /networks and authorization on DELETE /networks/:key", async () => {

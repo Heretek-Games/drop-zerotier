@@ -17,6 +17,43 @@ const KNOWN_BACKENDS = new Set<BackendName>([
 ]);
 
 /**
+ * Per-request HTTP timeout for provider calls, from `MESH_HTTP_TIMEOUT_MS`.
+ * Left unset the backends use their 10-second default; `0` disables the
+ * timeout. Invalid values fail closed.
+ */
+function readTimeoutMs(
+  env: Record<string, string | undefined>,
+): number | undefined {
+  const raw = env.MESH_HTTP_TIMEOUT_MS?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(
+      `MESH_HTTP_TIMEOUT_MS must be a non-negative number (got '${raw}')`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Tailscale auth-key lifetime in seconds, from `TAILSCALE_KEY_EXPIRY_SECONDS`.
+ * Left unset the provisioner requests one hour. Invalid values fail closed.
+ */
+function readKeyExpirySeconds(
+  env: Record<string, string | undefined>,
+): number | undefined {
+  const raw = env.TAILSCALE_KEY_EXPIRY_SECONDS?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `TAILSCALE_KEY_EXPIRY_SECONDS must be a positive number (got '${raw}')`,
+    );
+  }
+  return value;
+}
+
+/**
  * Select the mesh backend from `MESH_BACKEND` (explicit) or auto-detect from
  * configured credentials. Auto order: ZTNET → raw ZeroTier → Tailscale →
  * in-memory. An explicit value that is unknown or missing its configuration
@@ -37,6 +74,7 @@ export function resolveBackend(
   }
   const selectedOr = (name: BackendName) =>
     selected === "" || selected === name;
+  const timeoutMs = readTimeoutMs(env);
 
   // ZTNET-managed controller is the default path.
   const ztnetUrl = env.ZTNET_URL;
@@ -47,6 +85,7 @@ export function resolveBackend(
       baseUrl: ztnetUrl,
       apiToken: ztnetToken,
       organizationId: ztnetOrg,
+      timeoutMs,
     });
   }
 
@@ -54,7 +93,12 @@ export function resolveBackend(
   const authToken = env.ZEROTIER_TOKEN;
   const controllerNodeId = env.ZEROTIER_NODE;
   if (selectedOr("zerotier") && baseUrl && authToken && controllerNodeId) {
-    return new ZeroTierBackend({ baseUrl, authToken, controllerNodeId });
+    return new ZeroTierBackend({
+      baseUrl,
+      authToken,
+      controllerNodeId,
+      timeoutMs,
+    });
   }
 
   const tailscaleKey = env.TAILSCALE_API_KEY;
@@ -65,6 +109,8 @@ export function resolveBackend(
         apiKey: tailscaleKey,
         tailnet,
         tag: env.TAILSCALE_TAG ?? "tag:dropzerotier",
+        timeoutMs,
+        keyExpirySeconds: readKeyExpirySeconds(env),
       }),
     );
   }

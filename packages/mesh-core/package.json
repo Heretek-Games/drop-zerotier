@@ -1,0 +1,18 @@
+{
+  "name": "@drop/zerotier-mesh",
+  "version": "0.3.0",
+  "description": "Transport-only mesh backends (ZTNET, ZeroTier, Tailscale) for Drop",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/test/*.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.2"
+  }
+}

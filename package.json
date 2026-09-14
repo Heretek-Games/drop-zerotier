@@ -1,12 +1,31 @@
 {
   "name": "drop-zerotier",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "ZeroTier & ZTNET mesh network orchestration for the Drop gaming platform",
+  "description": "Virtual mesh network provider plugin (ZTNET / ZeroTier / Tailscale) for the Drop gaming platform",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "bootstrap": "node scripts/ztnet-bootstrap.mjs"
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "bundle:build": "drop-plugin build plugin-bundle",
+    "validate": "drop-plugin validate plugin-bundle",
+    "sign": "drop-plugin sign plugin-bundle",
+    "pack": "drop-plugin pack plugin-bundle dist-packages"
   },
   "devDependencies": {
-    "prettier": "^3.5.0"
+    "@droposs/plugin-cli": "^0.2.0",
+    "@types/node": "^22.0.0",
+    "prettier": "^3.5.0",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

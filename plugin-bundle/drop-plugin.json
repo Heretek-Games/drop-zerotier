@@ -1,0 +1,62 @@
+{
+  "id": "drop-zerotier",
+  "name": "Drop ZeroTier Mesh",
+  "version": "0.3.0",
+  "description": "Virtual mesh network provider for multiplayer rooms (ZTNET, ZeroTier or Tailscale)",
+  "author": "Heretek Games",
+  "homepage": "https://github.com/Heretek-Games/drop-zerotier",
+  "license": "GPL-3.0-or-later",
+  "apiVersion": 2,
+  "category": "multiplayer",
+  "trust": "trusted",
+  "storageVersion": 1,
+  "targets": [
+    "server",
+    "client"
+  ],
+  "capabilities": [
+    "routes",
+    "storage",
+    "websocket",
+    "events",
+    "network",
+    "game:launch-hook",
+    "client:storage",
+    "client:ws",
+    "system:command",
+    "ui:slot"
+  ],
+  "server": {
+    "source": "../packages/addon-server/dist/src/index.js",
+    "entry": "dist/server.js",
+    "storageVersion": 1,
+    "capabilities": [
+      "routes",
+      "storage",
+      "websocket",
+      "events",
+      "network"
+    ]
+  },
+  "client": {
+    "source": "../packages/addon-client/dist/src/index.js",
+    "entry": "dist/client.js",
+    "capabilities": [
+      "game:launch-hook",
+      "client:storage",
+      "client:ws",
+      "system:command",
+      "ui:slot"
+    ],
+    "commands": [
+      "zerotier-cli"
+    ]
+  },
+  "checksum": "305cf028140a3359982cf6c2e5a103ac565686af64c1403b19183f375318c68f",
+  "files": {
+    "dist/client.js": "df20a4bc28277e84938befefe46a0bdd211a9cf93302f61918f1aea8e30cdf78",
+    "dist/client.js.map": "acab368a82ce2a0b7d67a8004372b6799434dda18d4598d918694beb97785d90",
+    "dist/server.js": "305cf028140a3359982cf6c2e5a103ac565686af64c1403b19183f375318c68f",
+    "dist/server.js.map": "3825a03018f43f33ab6026874f2ebd40072faf449981cd5ec33cded827f56d67"
+  }
+}

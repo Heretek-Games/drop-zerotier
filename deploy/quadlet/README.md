@@ -9,44 +9,36 @@ Supports both **system-wide** (`/etc/containers/systemd/`) and **rootless user**
 ## 1. Stack Architecture
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │               Host Ingress              │
-                    │   3000 (Drop)  │  3002 (ZTNET) │ 9994/u │
-                    └───────┬───────────────┬────────────┬────┘
-                            │               │            │
- ┌──────────────────────────┼───────────────┼────────────┼──────────────────────────┐
- │ drop-network (172.20.0.0/16 Bridge)      │            │                          │
- │                          ▼               ▼            ▼                          │
- │                    ┌───────────┐   ┌───────────┐┌───────────┐                    │
- │                    │   drop    │   │drop-ztnet ││drop-      │                    │
- │                    │(172.20.20)│   │(172.20.32)││zerotier   │                    │
- │                    └─────┬─────┘   └─────┬─────┘│(172.20.30)│                    │
- │                          │               │      └─────▲─────┘                    │
- │                          ▼               ▼            │                          │
- │                    ┌───────────┐   ┌───────────┐      │                          │
- │                    │drop-      │   │drop-ztnet-│      │                          │
- │                    │postgres   │   │postgres   │      │                          │
- │                    │(172.20.21)│   │(172.20.31)│──────┘                          │
- │                    └───────────┘   └───────────┘                                 │
- └──────────────────────────────────────────────────────────────────────────────────┘
+                    ┌────────────────────────┐
+                    │      Host Ingress      │
+                    │        3000 (Drop)     │
+                    └───────────┬────────────┘
+                                │
+  ┌─────────────────────────────┼─────────────────────────────┐
+  │ drop-network (172.20.0.0/16 Bridge)                       │
+  │                             ▼                             │
+  │                       ┌───────────┐   ┌───────────┐       │
+  │                       │   drop    │──▶│drop-      │       │
+  │                       │(172.20.20)│   │postgres   │       │
+  │                       └───────────┘   │(172.20.21)│       │
+  │                                       └───────────┘       │
+  └───────────────────────────────────────────────────────────┘
 ```
 
 ### Components
 
-| Unit                            | Container Name        | Internal IP     | Host Port       | Purpose                                                                 |
-| :------------------------------ | :-------------------- | :-------------- | :-------------- | :---------------------------------------------------------------------- |
-| `drop-network.network`          | —                     | `172.20.0.0/16` | —               | User-defined bridge network with DNS resolution & IPv6 ULA              |
-| `drop-postgres.container`       | `drop-postgres`       | `172.20.0.21`   | _None_          | PostgreSQL 14 for Drop                                                  |
-| `drop.container`                | `drop`                | `172.20.0.20`   | `3000:3000`     | Web UI, REST API, WebSocket pub/sub, chunk depot                        |
-| `drop-zerotier.container`       | `drop-zerotier`       | `172.20.0.30`   | `9994:9994/udp` | ZeroTier controller data plane (port 9994 avoids host ZT conflict)      |
-| `drop-ztnet-postgres.container` | `drop-ztnet-postgres` | `172.20.0.31`   | _None_          | PostgreSQL 15 for ZTNET                                                 |
-| `drop-ztnet.container`          | `drop-ztnet`          | `172.20.0.32`   | `3002:3000`     | ZTNET web management UI & REST API (port 3002 avoids dashboard clashes) |
+| Unit                      | Container Name  | Internal IP     | Host Port   | Purpose                                            |
+| :------------------------ | :-------------- | :-------------- | :---------- | :------------------------------------------------- |
+| `drop-network.network`    | —               | `172.20.0.0/16` | —           | User-defined bridge network with DNS resolution    |
+| `drop-postgres.container` | `drop-postgres` | `172.20.0.21`   | _None_      | PostgreSQL 15 for Drop                             |
+| `drop.container`          | `drop`          | `172.20.0.20`   | `3000:3000` | Web UI, REST API, WebSocket pub/sub, chunk depot   |
+
+The multiplayer mesh is **not** bundled. Install the `drop-zerotier` plugin and
+point it at a ZTNET controller you operate (see the plugin README).
 
 ---
 
 ## 2. Quickstart
-
-### Option A: Full Stack with GSE Multiplayer Mesh (Recommended)
 
 ```bash
 # For system-wide deployment (root):
@@ -56,23 +48,11 @@ sudo ./install.sh
 ./install.sh
 ```
 
-Once the containers start, bootstrap the ZTNET organization and mint the API token:
-
-```bash
-./bootstrap-ztnet.sh
-```
-
-### Option B: Base Stack Only (No Multiplayer Mesh)
-
-```bash
-sudo ./install.sh --base-only
-```
-
 ---
 
 ## 3. Storage & Volume Configuration
 
-By default, the template defines Podman named volumes (`drop-data.volume`, `drop-db.volume`, `drop-cache.volume`, `drop-zerotier.volume`, `drop-ztnet-db.volume`).
+By default, the template defines Podman named volumes (`drop-data.volume`, `drop-db.volume`, `drop-cache.volume`).
 
 ### Mounting Host Game Libraries
 
@@ -96,19 +76,7 @@ Volume=/mnt/fast-nvme/drop-cache:/cache
 
 ---
 
-## 4. Port Configuration
-
-- **Drop Web UI**: `3000:3000`
-- **ZTNET Admin Dashboard**: `3002:3000` (defaults to 3002 to avoid conflicts with other developer tools on 3001)
-- **ZeroTier Controller**: `9994:9994/udp` (defaults to 9994 to avoid collisions if the host machine also runs ZeroTier One on port 9993)
-
-To change host ports, edit `PublishPort=` in the respective `.container` unit and reload.
-
----
-
-## 5. Uninstallation
-
-To cleanly stop and remove the Quadlet units:
+## 4. Uninstallation
 
 ```bash
 # Keep data volumes:

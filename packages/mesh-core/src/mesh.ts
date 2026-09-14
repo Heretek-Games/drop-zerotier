@@ -1,4 +1,4 @@
-import type { IssuedCredential, MeshBackend, PublicMeshInfo } from "./types";
+import type { IssuedCredential, MeshBackend, PublicMeshInfo } from "./types.js";
 
 function hashString(value: string): number {
   let hash = 0;
@@ -8,17 +8,17 @@ function hashString(value: string): number {
   return hash;
 }
 
-/** Base CIDR for per-room ZeroTier networks (10.242.0.0/16, one /24 each). */
+/** Base CIDR for per-network ZeroTier meshes (10.242.0.0/16, one /24 each). */
 export const ZEROTIER_BASE_CIDR = "10.242.0.0/16"; // NOSONAR: RFC1918 private range for the built-in mesh pool
 
-/** Deterministically derive a unique /24 room CIDR from the room id. */
-export function roomCidr(roomId: string): string {
-  const thirdOctet = hashString(roomId) % 256;
+/** Deterministically derive a unique /24 network CIDR from the network key. */
+export function networkCidr(key: string): string {
+  const thirdOctet = hashString(key) % 256;
   return `10.242.${thirdOctet}.0/24`;
 }
 
-/** Deterministic host address inside a room /24 (offset 20–219). */
-export function roomMemberAddress(
+/** Deterministic host address inside a network /24 (offset 20–219). */
+export function networkMemberAddress(
   cidr: string,
   userId: string,
 ): string | undefined {
@@ -29,9 +29,9 @@ export function roomMemberAddress(
 }
 
 /**
- * First free address in a room /24, starting at the deterministic hash slot and
- * probing upward. `used` are addresses already assigned in the room, so two
- * members cannot collide even when their hashes do.
+ * First free address in a network /24, starting at the deterministic hash slot
+ * and probing upward. `used` are addresses already assigned in the network, so
+ * two members cannot collide even when their hashes do.
  */
 export function allocateMemberAddress(
   cidr: string,
@@ -58,53 +58,53 @@ export class InMemoryMeshBackend implements MeshBackend {
   readonly id = "zerotier" as const;
   private readonly members = new Map<string, Set<string>>();
 
-  async provision(roomId: string, expiresAt: number): Promise<PublicMeshInfo> {
+  async provision(key: string, expiresAt: number): Promise<PublicMeshInfo> {
     return {
       backend: "zerotier",
-      cidr: roomCidr(roomId),
-      networkId: `zt-${roomId.slice(0, 16)}`,
+      cidr: networkCidr(key),
+      networkId: `zt-${key.slice(0, 16)}`,
       expiresAt,
     };
   }
 
   async issueCredential(
-    roomId: string,
+    key: string,
     userId: string,
     mesh: PublicMeshInfo,
   ): Promise<IssuedCredential> {
-    const set = this.members.get(roomId) ?? new Set<string>();
+    const set = this.members.get(key) ?? new Set<string>();
     set.add(userId);
-    this.members.set(roomId, set);
+    this.members.set(key, set);
     return {
-      secret: `zt-member:${roomId}:${userId}:${mesh.backend}`,
+      secret: `zt-member:${key}:${userId}:${mesh.backend}`,
       address:
         mesh.backend === "zerotier"
-          ? roomMemberAddress(mesh.cidr, userId)
+          ? networkMemberAddress(mesh.cidr, userId)
           : undefined,
     };
   }
 
-  async revokeMember(roomId: string, userId: string): Promise<void> {
-    this.members.get(roomId)?.delete(userId);
+  async revokeMember(key: string, userId: string): Promise<void> {
+    this.members.get(key)?.delete(userId);
   }
 
   async authorizeMember(
-    roomId: string,
+    key: string,
     _userId: string,
     memberId: string,
     mesh?: PublicMeshInfo,
     usedAddresses: string[] = [],
   ): Promise<string | undefined> {
-    const cidr = mesh?.backend === "zerotier" ? mesh.cidr : roomCidr(roomId);
+    const cidr = mesh?.backend === "zerotier" ? mesh.cidr : networkCidr(key);
     return allocateMemberAddress(cidr, memberId, usedAddresses);
   }
 
-  async teardown(roomId: string, _mesh?: PublicMeshInfo): Promise<void> {
-    this.members.delete(roomId);
+  async teardown(key: string, _mesh?: PublicMeshInfo): Promise<void> {
+    this.members.delete(key);
   }
 
-  memberCount(roomId: string): number {
-    return this.members.get(roomId)?.size ?? 0;
+  memberCount(key: string): number {
+    return this.members.get(key)?.size ?? 0;
   }
 }
 
@@ -143,7 +143,7 @@ export class ZeroTierBackend implements MeshBackend {
   readonly id = "zerotier" as const;
   private readonly fetchImpl: FetchLike;
   private readonly networks = new Map<string, string>();
-  /** roomId → (userId → member node id), for revocation. */
+  /** key → (userId → member node id), for revocation. */
   private readonly memberIds = new Map<string, Map<string, string>>();
 
   constructor(private readonly options: ZeroTierControllerOptions) {
@@ -157,14 +157,14 @@ export class ZeroTierBackend implements MeshBackend {
     };
   }
 
-  async provision(roomId: string, expiresAt: number): Promise<PublicMeshInfo> {
+  async provision(key: string, expiresAt: number): Promise<PublicMeshInfo> {
     const url = `${this.options.baseUrl}/controller/network/${encodeURIComponent(this.options.controllerNodeId)}______`;
-    const cidr = roomCidr(roomId);
+    const cidr = networkCidr(key);
     const response = await this.fetchImpl(url, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify({
-        name: `drop-gse-${roomId}`,
+        name: `drop-zerotier-${key}`,
         private: true,
         enableBroadcast: true,
         v4AssignMode: { zt: true },
@@ -186,7 +186,7 @@ export class ZeroTierBackend implements MeshBackend {
     if (!created?.id) {
       throw new Error("ZeroTier network creation returned no network id");
     }
-    this.networks.set(roomId, created.id);
+    this.networks.set(key, created.id);
     return {
       backend: "zerotier",
       cidr,
@@ -196,7 +196,7 @@ export class ZeroTierBackend implements MeshBackend {
   }
 
   async issueCredential(
-    roomId: string,
+    key: string,
     userId: string,
     mesh: PublicMeshInfo,
   ): Promise<IssuedCredential> {
@@ -205,26 +205,23 @@ export class ZeroTierBackend implements MeshBackend {
     }
     // A member joins the network and requests authorization; the assigned
     // address is reported by the controller once the member is authorized.
-    return { secret: `zerotier:${mesh.networkId}:${roomId}:${userId}` };
+    return { secret: `zerotier:${mesh.networkId}:${key}:${userId}` };
   }
 
-  private networkIdFor(
-    roomId: string,
-    mesh?: PublicMeshInfo,
-  ): string | undefined {
+  private networkIdFor(key: string, mesh?: PublicMeshInfo): string | undefined {
     const persisted = mesh?.backend === "zerotier" ? mesh.networkId : undefined;
-    const networkId = this.networks.get(roomId) ?? persisted;
-    if (networkId) this.networks.set(roomId, networkId);
+    const networkId = this.networks.get(key) ?? persisted;
+    if (networkId) this.networks.set(key, networkId);
     return networkId;
   }
 
   async authorizeMember(
-    roomId: string,
+    key: string,
     userId: string,
     memberId: string,
     mesh?: PublicMeshInfo,
   ): Promise<string | undefined> {
-    const networkId = this.networkIdFor(roomId, mesh);
+    const networkId = this.networkIdFor(key, mesh);
     if (!networkId) return undefined;
     const response = await this.fetchImpl(
       `${this.options.baseUrl}/network/${encodeURIComponent(networkId)}/member/${encodeURIComponent(memberId)}`,
@@ -239,9 +236,9 @@ export class ZeroTierBackend implements MeshBackend {
         `ZeroTier member authorization failed (${response.status})`,
       );
     }
-    const roomMembers = this.memberIds.get(roomId) ?? new Map<string, string>();
+    const roomMembers = this.memberIds.get(key) ?? new Map<string, string>();
     roomMembers.set(userId, memberId);
-    this.memberIds.set(roomId, roomMembers);
+    this.memberIds.set(key, roomMembers);
 
     const member = (await response.json()) as {
       assignedAddresses?: string[];
@@ -252,15 +249,15 @@ export class ZeroTierBackend implements MeshBackend {
   }
 
   async revokeMember(
-    roomId: string,
+    key: string,
     userId: string,
     mesh?: PublicMeshInfo,
     memberId?: string,
   ): Promise<void> {
-    const networkId = this.networkIdFor(roomId, mesh);
-    const nodeId = memberId ?? this.memberIds.get(roomId)?.get(userId);
+    const networkId = this.networkIdFor(key, mesh);
+    const nodeId = memberId ?? this.memberIds.get(key)?.get(userId);
     if (!networkId || !nodeId) return;
-    this.memberIds.get(roomId)?.delete(userId);
+    this.memberIds.get(key)?.delete(userId);
     const response = await this.fetchImpl(
       `${this.options.baseUrl}/network/${encodeURIComponent(networkId)}/member/${encodeURIComponent(nodeId)}`,
       {
@@ -275,11 +272,11 @@ export class ZeroTierBackend implements MeshBackend {
     }
   }
 
-  async teardown(roomId: string, mesh?: PublicMeshInfo): Promise<void> {
-    const networkId = this.networkIdFor(roomId, mesh);
-    this.memberIds.delete(roomId);
+  async teardown(key: string, mesh?: PublicMeshInfo): Promise<void> {
+    const networkId = this.networkIdFor(key, mesh);
+    this.memberIds.delete(key);
     if (!networkId) return;
-    this.networks.delete(roomId);
+    this.networks.delete(key);
     const response = await this.fetchImpl(
       `${this.options.baseUrl}/controller/network/${encodeURIComponent(networkId)}`,
       { method: "DELETE", headers: this.headers() },
@@ -293,20 +290,20 @@ export class ZeroTierBackend implements MeshBackend {
 
 /**
  * Tailscale control-plane operations, injected so the backend is testable
- * without a tailnet. A real implementation provisions a room tag + same-room
+ * without a tailnet. A real implementation provisions a network tag + same-room
  * ACL before issuing any key, and removes tagged nodes on teardown.
  */
 export interface TailscaleProvisioner {
-  provisionRoom(roomId: string): Promise<string>;
-  issueAuthKey(aclTag: string, userId: string, roomId: string): Promise<string>;
-  teardownRoom(roomId: string): Promise<void>;
+  provisionRoom(key: string): Promise<string>;
+  issueAuthKey(aclTag: string, userId: string, key: string): Promise<string>;
+  teardownRoom(key: string): Promise<void>;
 }
 
 /** Lifetime requested for Tailscale auth keys (matches the API request below). */
 export const TAILSCALE_KEY_LIFETIME_MS = 60 * 60 * 1000;
 
 /**
- * Tailscale ephemeral backend. Keys are one-off and tagged per room; the
+ * Tailscale ephemeral backend. Keys are one-off and tagged per network; the
  * client joins with isolated ephemeral state so a user's own tailnet identity
  * is never replaced.
  */
@@ -315,13 +312,13 @@ export class TailscaleBackend implements MeshBackend {
 
   constructor(private readonly provisioner: TailscaleProvisioner) {}
 
-  async provision(roomId: string, expiresAt: number): Promise<PublicMeshInfo> {
-    const aclTag = await this.provisioner.provisionRoom(roomId);
+  async provision(key: string, expiresAt: number): Promise<PublicMeshInfo> {
+    const aclTag = await this.provisioner.provisionRoom(key);
     return { backend: "tailscale", aclTag, expiresAt };
   }
 
   async issueCredential(
-    roomId: string,
+    key: string,
     userId: string,
     mesh: PublicMeshInfo,
   ): Promise<IssuedCredential> {
@@ -329,7 +326,7 @@ export class TailscaleBackend implements MeshBackend {
       throw new Error("TailscaleBackend received non-tailscale mesh info");
     }
     return {
-      secret: await this.provisioner.issueAuthKey(mesh.aclTag, userId, roomId),
+      secret: await this.provisioner.issueAuthKey(mesh.aclTag, userId, key),
       expiresAt: Date.now() + TAILSCALE_KEY_LIFETIME_MS,
     };
   }
@@ -338,8 +335,8 @@ export class TailscaleBackend implements MeshBackend {
     // Ephemeral nodes purge themselves; tagged-node removal happens on teardown.
   }
 
-  async teardown(roomId: string, _mesh?: PublicMeshInfo): Promise<void> {
-    await this.provisioner.teardownRoom(roomId);
+  async teardown(key: string, _mesh?: PublicMeshInfo): Promise<void> {
+    await this.provisioner.teardownRoom(key);
   }
 }
 
@@ -351,9 +348,9 @@ export interface TailscaleApiOptions {
   /** Tailnet name, e.g. `example.com`. */
   tailnet: string;
   /**
-   * Pre-declared tag applied to room devices. Tailscale tags are declared in
+   * Pre-declared tag applied to network devices. Tailscale tags are declared in
    * the tailnet policy file; the plugin does not mutate policy, so one tag is
-   * reused (BYO-tailnet mode, weaker per-room isolation than ZeroTier).
+   * reused (BYO-tailnet mode, weaker per-network isolation than ZeroTier).
    */
   tag: string;
   fetchImpl?: FetchLike;
@@ -361,12 +358,12 @@ export interface TailscaleApiOptions {
 
 /**
  * Tailscale API provisioner. Issues one-off, ephemeral, pre-authorized keys
- * tagged for the room and revokes them on teardown.
+ * tagged for the network and revokes them on teardown.
  */
 export class TailscaleApiProvisioner implements TailscaleProvisioner {
   private readonly fetchImpl: FetchLike;
   private readonly baseUrl: string;
-  /** roomId → (userId → issued key id), so a re-issued key can revoke its predecessor. */
+  /** key → (userId → issued key id), so a re-issued key can revoke its predecessor. */
   private readonly keyIds = new Map<string, Map<string, string>>();
 
   constructor(private readonly options: TailscaleApiOptions) {
@@ -381,26 +378,25 @@ export class TailscaleApiProvisioner implements TailscaleProvisioner {
     };
   }
 
-  async provisionRoom(_roomId: string): Promise<string> {
-    // Tags are policy-declared; reuse the configured tag for the room.
+  async provisionRoom(_key: string): Promise<string> {
+    // Tags are policy-declared; reuse the configured tag for the network.
     return this.options.tag;
   }
 
   async issueAuthKey(
     aclTag: string,
     userId: string,
-    roomId: string,
+    key: string,
   ): Promise<string> {
-    const roomKeys = this.keyIds.get(roomId) ?? new Map<string, string>();
-    this.keyIds.set(roomId, roomKeys);
+    const networkKeys = this.keyIds.get(key) ?? new Map<string, string>();
+    this.keyIds.set(key, networkKeys);
 
     // Revoke the member's previous key before minting a new one, so rotation
-    // (every read after a restart, or near expiry) does not leave a trail of
-    // live keys.
-    const previous = roomKeys.get(userId);
+    // does not leave a trail of live keys.
+    const previous = networkKeys.get(userId);
     if (previous) {
       await this.deleteKey(previous, true);
-      roomKeys.delete(userId);
+      networkKeys.delete(userId);
     }
 
     const url = `${this.baseUrl}/tailnet/${this.options.tailnet}/keys`;
@@ -419,7 +415,7 @@ export class TailscaleApiProvisioner implements TailscaleProvisioner {
           },
         },
         expirySeconds: 3600,
-        description: `drop-gse ${userId}`,
+        description: `drop-zerotier ${userId}`,
       }),
     });
     if (!response.ok) {
@@ -431,7 +427,7 @@ export class TailscaleApiProvisioner implements TailscaleProvisioner {
     if (!data.key) {
       throw new Error("Tailscale key creation returned no key");
     }
-    if (data.id) roomKeys.set(userId, data.id);
+    if (data.id) networkKeys.set(userId, data.id);
     return data.key;
   }
 
@@ -446,11 +442,11 @@ export class TailscaleApiProvisioner implements TailscaleProvisioner {
     }
   }
 
-  async teardownRoom(roomId: string): Promise<void> {
-    const roomKeys = this.keyIds.get(roomId);
-    this.keyIds.delete(roomId);
-    if (!roomKeys) return;
-    for (const id of roomKeys.values()) {
+  async teardownRoom(key: string): Promise<void> {
+    const networkKeys = this.keyIds.get(key);
+    this.keyIds.delete(key);
+    if (!networkKeys) return;
+    for (const id of networkKeys.values()) {
       await this.deleteKey(id);
     }
   }

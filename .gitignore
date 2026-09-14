@@ -4,3 +4,9 @@ target/
 Cargo.lock
 .env
 *.log
+
+# Plugin bundle artifacts (drop-plugin.json is committed; builds are not)
+plugin-bundle/dist/
+plugin-bundle/dist-package/
+dist-packages/
+*.tsbuildinfo

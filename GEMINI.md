@@ -4,7 +4,13 @@
 
 ## Quick Reference
 
-- **Controller**: `packages/controller/` (TypeScript)
-- **Daemon**: `packages/daemon/` (Rust)
-- **Deployment**: `deploy/docker-compose.ztnet.yml`, `deploy/quadlet/`
-- **Bootstrap**: `node scripts/ztnet-bootstrap.mjs`
+- **Mesh core**: `packages/mesh-core/` (`@drop/zerotier-mesh`)
+- **Server addon**: `packages/addon-server/`
+- **Client addon**: `packages/addon-client/`
+- **Deployment**: `deploy/quadlet/` (base Drop stack; BYO ZTNET controller)
+
+```bash
+npm install && npm run build -w @drop/zerotier-mesh && npm run build
+npm test
+npm run bundle:build && npm run validate && npm run pack
+```

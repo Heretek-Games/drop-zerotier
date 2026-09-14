@@ -1,0 +1,24 @@
+{
+  "name": "@drop/zerotier-addon-server",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Drop server plugin: mesh network lifecycle & membership for drop-zerotier",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/test/*.js"
+  },
+  "dependencies": {
+    "@drop/zerotier-mesh": "0.3.0",
+    "@droposs/plugin-sdk": "file:../../../drop-plugin-sdk/packages/plugin-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "h3": "^1.15.0",
+    "typescript": "^5.7.2"
+  }
+}

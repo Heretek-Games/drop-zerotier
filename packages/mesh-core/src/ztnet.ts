@@ -1,12 +1,16 @@
-import { allocateMemberAddress, type FetchLike, roomCidr } from "./mesh";
-import type { IssuedCredential, MeshBackend, PublicMeshInfo } from "./types";
+import {
+  allocateMemberAddress,
+  type FetchLike,
+  networkCidr,
+} from "./mesh.js";
+import type { IssuedCredential, MeshBackend, PublicMeshInfo } from "./types.js";
 
 export interface ZtnetBackendOptions {
-  /** ZTNET base URL, e.g. `http://ztnet:3000`. */
+  /** ZTNET base URL, e.g. `https://ztnet.example.com`. */
   baseUrl: string;
   /** Organization API token (`x-ztnet-auth`). */
   apiToken: string;
-  /** ZTNET organization id that owns the room networks. */
+  /** ZTNET organization id that owns the networks. */
   organizationId: string;
   fetchImpl?: FetchLike;
 }
@@ -38,7 +42,7 @@ interface ZtnetMemberResponse {
  * `x-ztnet-auth` organization token.
  *
  * Note: ZTNET's network update schema does not expose `enableBroadcast`; LAN
- * discovery is delivered through the module's unicast `custom_broadcasts.txt`.
+ * discovery is delivered through the consumer's unicast `custom_broadcasts.txt`.
  */
 export class ZtnetBackend implements MeshBackend {
   readonly id = "zerotier" as const;
@@ -46,7 +50,7 @@ export class ZtnetBackend implements MeshBackend {
   private readonly baseUrl: string;
   private readonly baseOrigin: string;
   private readonly networks = new Map<string, string>();
-  /** roomId → (userId → member node id), for revocation. */
+  /** key → (userId → member node id), for revocation. */
   private readonly memberIds = new Map<string, Map<string, string>>();
 
   constructor(private readonly options: ZtnetBackendOptions) {
@@ -74,7 +78,7 @@ export class ZtnetBackend implements MeshBackend {
     },
   ): Promise<Awaited<ReturnType<FetchLike>>> {
     // Re-parse every request against the configured base origin so a caller
-    // cannot turn room/member ids into a request to another host.
+    // cannot turn network/member ids into a request to another host.
     const target = new URL(url);
     if (target.origin !== this.baseOrigin) {
       throw new Error("ZTNET request URL escaped the configured base URL");
@@ -119,36 +123,33 @@ export class ZtnetBackend implements MeshBackend {
   }
 
   /**
-   * Resolve a room's network id from live state or persisted mesh info, caching
-   * it so a restarted coordinator can still authorize/revoke/tear down.
+   * Resolve a network id from live state or persisted mesh info, caching it so
+   * a restarted coordinator can still authorize/revoke/tear down.
    */
-  private networkIdFor(
-    roomId: string,
-    mesh?: PublicMeshInfo,
-  ): string | undefined {
+  private networkIdFor(key: string, mesh?: PublicMeshInfo): string | undefined {
     const persisted = mesh?.backend === "zerotier" ? mesh.networkId : undefined;
-    const networkId = this.networks.get(roomId) ?? persisted;
-    if (networkId) this.networks.set(roomId, networkId);
+    const networkId = this.networks.get(key) ?? persisted;
+    if (networkId) this.networks.set(key, networkId);
     return networkId;
   }
 
-  async provision(roomId: string, expiresAt: number): Promise<PublicMeshInfo> {
+  async provision(key: string, expiresAt: number): Promise<PublicMeshInfo> {
     const created = await this.json<ZtnetNetworkResponse>(this.orgUrl(), {
       method: "POST",
-      body: JSON.stringify({ name: `drop-gse-${roomId}` }),
+      body: JSON.stringify({ name: `drop-zerotier-${key}` }),
     });
     const networkId = created.nwid ?? created.id;
     if (!networkId) {
       throw new Error("ZTNET network creation returned no network id");
     }
 
-    const cidr = roomCidr(roomId);
+    const cidr = networkCidr(key);
     await this.json<ZtnetNetworkResponse>(
       this.orgUrl(`/${encodeURIComponent(networkId)}`),
       {
         method: "POST",
         body: JSON.stringify({
-          name: `drop-gse-${roomId}`,
+          name: `drop-zerotier-${key}`,
           private: true,
           v4AssignMode: { zt: true },
           ipAssignmentPools: [
@@ -162,7 +163,7 @@ export class ZtnetBackend implements MeshBackend {
       },
     );
 
-    this.networks.set(roomId, networkId);
+    this.networks.set(key, networkId);
     return {
       backend: "zerotier",
       cidr,
@@ -172,7 +173,7 @@ export class ZtnetBackend implements MeshBackend {
   }
 
   async issueCredential(
-    roomId: string,
+    key: string,
     userId: string,
     mesh: PublicMeshInfo,
   ): Promise<IssuedCredential> {
@@ -181,25 +182,24 @@ export class ZtnetBackend implements MeshBackend {
     }
     // The client joins the network with the nwid; ZTNET authorizes the node
     // once it reports its member id (see `authorizeMember`).
-    return { secret: `zerotier:${mesh.networkId}:${roomId}:${userId}` };
+    return { secret: `zerotier:${mesh.networkId}:${key}:${userId}` };
   }
 
   async authorizeMember(
-    roomId: string,
+    key: string,
     userId: string,
     memberId: string,
     mesh?: PublicMeshInfo,
     usedAddresses: string[] = [],
   ): Promise<string | undefined> {
-    const networkId = this.networkIdFor(roomId, mesh);
+    const networkId = this.networkIdFor(key, mesh);
     if (!networkId) return undefined;
 
-    // Assign a deterministic address from the room pool at authorization time;
-    // the controller does not auto-assign until the node actually joins, and
-    // peers need known addresses for `custom_broadcasts.txt`. Existing
+    // Assign a deterministic address from the network pool at authorization
+    // time; peers need known addresses for their unicast peer list. Existing
     // assignments are skipped so two members cannot collide.
     const assigned = allocateMemberAddress(
-      roomCidr(roomId),
+      networkCidr(key),
       memberId,
       usedAddresses,
     );
@@ -217,24 +217,25 @@ export class ZtnetBackend implements MeshBackend {
       },
     );
 
-    const roomMembers = this.memberIds.get(roomId) ?? new Map<string, string>();
-    roomMembers.set(userId, memberId);
-    this.memberIds.set(roomId, roomMembers);
+    const networkMembers =
+      this.memberIds.get(key) ?? new Map<string, string>();
+    networkMembers.set(userId, memberId);
+    this.memberIds.set(key, networkMembers);
 
     // ZTNET returns plain IPs (no CIDR suffix).
     return member.ipAssignments?.[0] ?? assigned;
   }
 
   async revokeMember(
-    roomId: string,
+    key: string,
     userId: string,
     mesh?: PublicMeshInfo,
     memberId?: string,
   ): Promise<void> {
-    const networkId = this.networkIdFor(roomId, mesh);
-    // Prefer the persisted node id so revocation survives a coordinator restart.
-    const nodeId = memberId ?? this.memberIds.get(roomId)?.get(userId);
-    this.memberIds.get(roomId)?.delete(userId);
+    const networkId = this.networkIdFor(key, mesh);
+    // Prefer the persisted node id so revocation survives a restart.
+    const nodeId = memberId ?? this.memberIds.get(key)?.get(userId);
+    this.memberIds.get(key)?.delete(userId);
     if (!networkId || !nodeId) return;
     await this.request(
       this.orgUrl(
@@ -246,11 +247,11 @@ export class ZtnetBackend implements MeshBackend {
     );
   }
 
-  async teardown(roomId: string, mesh?: PublicMeshInfo): Promise<void> {
-    const networkId = this.networkIdFor(roomId, mesh);
-    this.memberIds.delete(roomId);
+  async teardown(key: string, mesh?: PublicMeshInfo): Promise<void> {
+    const networkId = this.networkIdFor(key, mesh);
+    this.memberIds.delete(key);
     if (!networkId) return;
-    this.networks.delete(roomId);
+    this.networks.delete(key);
     await this.request(this.orgUrl(`/${encodeURIComponent(networkId)}`), {
       method: "DELETE",
     });

@@ -17,7 +17,6 @@ Volume=drop-cache.volume:/cache
 # Game storage library mount (uncomment and point to your library path)
 # Volume=/mnt/storage/games:/library:ro
 EnvironmentFile=%E/containers/systemd/drop.env
-EnvironmentFile=%E/containers/systemd/ztnet-credentials.env
 Environment=HOSTNAME=drop
 SecurityLabelDisable=true
 

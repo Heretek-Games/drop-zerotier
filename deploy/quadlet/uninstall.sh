@@ -30,16 +30,13 @@ else
 fi
 
 echo "==> 1. Stopping Drop Quadlet services..."
-${SYSTEMCTL} stop drop.service drop-ztnet.service drop-ztnet-postgres.service drop-zerotier.service drop-postgres.service drop-network-network.service 2>/dev/null || true
+${SYSTEMCTL} stop drop.service drop-postgres.service drop-network-network.service 2>/dev/null || true
 ${SYSTEMCTL} reset-failed drop*.service 2>/dev/null || true
 
 echo "==> 2. Removing Quadlet unit files from ${QUADLET_DIR}..."
 rm -f "${QUADLET_DIR}/drop-network.network" \
       "${QUADLET_DIR}/drop-postgres.container" \
       "${QUADLET_DIR}/drop.container" \
-      "${QUADLET_DIR}/drop-zerotier.container" \
-      "${QUADLET_DIR}/drop-ztnet-postgres.container" \
-      "${QUADLET_DIR}/drop-ztnet.container" \
       "${QUADLET_DIR}/drop-*.volume"
 
 echo "==> 3. Reloading systemd daemon..."
@@ -47,9 +44,9 @@ ${SYSTEMCTL} daemon-reload
 
 if [[ "$REMOVE_VOLUMES" = true ]]; then
   echo "==> 4. Purging Podman named volumes..."
-  podman volume rm -f systemd-drop-db systemd-drop-data systemd-drop-cache systemd-drop-zerotier systemd-drop-ztnet-db 2>/dev/null || true
-  podman volume rm -f drop-db drop-data drop-cache drop-zerotier drop-ztnet-db 2>/dev/null || true
-  rm -f "${QUADLET_DIR}/drop.env" "${QUADLET_DIR}/ztnet.env" "${QUADLET_DIR}/ztnet-credentials.env"
+  podman volume rm -f systemd-drop-db systemd-drop-data systemd-drop-cache 2>/dev/null || true
+  podman volume rm -f drop-db drop-data drop-cache 2>/dev/null || true
+  rm -f "${QUADLET_DIR}/drop.env"
 fi
 
 echo ""

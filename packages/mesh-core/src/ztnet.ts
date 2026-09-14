@@ -1,4 +1,10 @@
-import { allocateMemberAddress, type FetchLike, networkCidr } from "./mesh.js";
+import {
+  allocateMemberAddress,
+  DEFAULT_MESH_FETCH_TIMEOUT_MS,
+  meshFetchSignal,
+  type FetchLike,
+  networkCidr,
+} from "./mesh.js";
 import type { IssuedCredential, MeshBackend, PublicMeshInfo } from "./types.js";
 
 export interface ZtnetBackendOptions {
@@ -9,6 +15,11 @@ export interface ZtnetBackendOptions {
   /** ZTNET organization id that owns the networks. */
   organizationId: string;
   fetchImpl?: FetchLike;
+  /**
+   * Per-request timeout in milliseconds (default
+   * {@link DEFAULT_MESH_FETCH_TIMEOUT_MS}; `0` disables the timeout).
+   */
+  timeoutMs?: number;
 }
 
 /** Strips trailing slashes without a backtracking-prone regular expression. */
@@ -45,6 +56,7 @@ export class ZtnetBackend implements MeshBackend {
   private readonly fetchImpl: FetchLike;
   private readonly baseUrl: string;
   private readonly baseOrigin: string;
+  private readonly timeoutMs: number;
   private readonly networks = new Map<string, string>();
   /** key → (userId → member node id), for revocation. */
   private readonly memberIds = new Map<string, Map<string, string>>();
@@ -53,6 +65,7 @@ export class ZtnetBackend implements MeshBackend {
     this.fetchImpl = options.fetchImpl ?? (fetch as unknown as FetchLike);
     this.baseUrl = trimTrailingSlashes(options.baseUrl);
     this.baseOrigin = new URL(this.baseUrl).origin;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_MESH_FETCH_TIMEOUT_MS;
   }
 
   private headers(): Record<string, string> {
@@ -82,6 +95,7 @@ export class ZtnetBackend implements MeshBackend {
     const response = await this.fetchImpl(target.toString(), {
       method: init?.method ?? "GET",
       headers: this.headers(),
+      signal: meshFetchSignal(this.timeoutMs),
       body: init?.body,
     });
     if (!response.ok) {

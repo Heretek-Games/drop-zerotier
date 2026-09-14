@@ -108,6 +108,20 @@ export class InMemoryMeshBackend implements MeshBackend {
   }
 }
 
+/**
+ * Default timeout for mesh provider HTTP calls (10s). A stalled controller or
+ * tailnet API must not hang lobby provisioning, authorization or revocation.
+ */
+export const DEFAULT_MESH_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Build a per-request abort signal from a timeout. `timeoutMs <= 0` disables
+ * the timeout so the platform fetch default applies.
+ */
+export function meshFetchSignal(timeoutMs: number): AbortSignal | undefined {
+  return timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
+}
+
 /** Minimal fetch surface so the controller client is testable. */
 export type FetchLike = (
   input: string,
@@ -115,6 +129,7 @@ export type FetchLike = (
     method?: string;
     headers?: Record<string, string>;
     body?: string;
+    signal?: AbortSignal;
   },
 ) => Promise<{
   ok: boolean;
@@ -131,6 +146,11 @@ export interface ZeroTierControllerOptions {
   /** Controller node id (see ZeroTier API `POST /controller/network`). */
   controllerNodeId: string;
   fetchImpl?: FetchLike;
+  /**
+   * Per-request timeout in milliseconds (default
+   * {@link DEFAULT_MESH_FETCH_TIMEOUT_MS}; `0` disables the timeout).
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -142,12 +162,14 @@ export interface ZeroTierControllerOptions {
 export class ZeroTierBackend implements MeshBackend {
   readonly id = "zerotier" as const;
   private readonly fetchImpl: FetchLike;
+  private readonly timeoutMs: number;
   private readonly networks = new Map<string, string>();
   /** key → (userId → member node id), for revocation. */
   private readonly memberIds = new Map<string, Map<string, string>>();
 
   constructor(private readonly options: ZeroTierControllerOptions) {
     this.fetchImpl = options.fetchImpl ?? (fetch as unknown as FetchLike);
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_MESH_FETCH_TIMEOUT_MS;
   }
 
   private headers(): Record<string, string> {
@@ -163,6 +185,7 @@ export class ZeroTierBackend implements MeshBackend {
     const response = await this.fetchImpl(url, {
       method: "POST",
       headers: this.headers(),
+      signal: meshFetchSignal(this.timeoutMs),
       body: JSON.stringify({
         name: `drop-zerotier-${key}`,
         private: true,
@@ -228,6 +251,7 @@ export class ZeroTierBackend implements MeshBackend {
       {
         method: "POST",
         headers: this.headers(),
+        signal: meshFetchSignal(this.timeoutMs),
         body: JSON.stringify({ authorized: true }),
       },
     );
@@ -263,6 +287,7 @@ export class ZeroTierBackend implements MeshBackend {
       {
         method: "POST",
         headers: this.headers(),
+        signal: meshFetchSignal(this.timeoutMs),
         body: JSON.stringify({ authorized: false }),
       },
     );
@@ -279,7 +304,11 @@ export class ZeroTierBackend implements MeshBackend {
     this.networks.delete(key);
     const response = await this.fetchImpl(
       `${this.options.baseUrl}/controller/network/${encodeURIComponent(networkId)}`,
-      { method: "DELETE", headers: this.headers() },
+      {
+        method: "DELETE",
+        headers: this.headers(),
+        signal: meshFetchSignal(this.timeoutMs),
+      },
     );
     // Already-deleted networks are a successful teardown (idempotent).
     if (!response.ok && response.status !== 404) {
@@ -296,6 +325,14 @@ export class ZeroTierBackend implements MeshBackend {
 export interface TailscaleProvisioner {
   provisionRoom(key: string): Promise<string>;
   issueAuthKey(aclTag: string, userId: string, key: string): Promise<string>;
+  /**
+   * Revoke a member's tailnet device by device id. Optional: consumers that do
+   * not report device ids fall back to ephemeral-node purge and key expiry
+   * (see the README "Tailscale limitations" section).
+   */
+  revokeDevice?(deviceId: string): Promise<void>;
+  /** Key lifetime the provisioner requests, for credential metadata. */
+  keyLifetimeMs?(): number;
   teardownRoom(key: string): Promise<void>;
 }
 
@@ -327,12 +364,31 @@ export class TailscaleBackend implements MeshBackend {
     }
     return {
       secret: await this.provisioner.issueAuthKey(mesh.aclTag, userId, key),
-      expiresAt: Date.now() + TAILSCALE_KEY_LIFETIME_MS,
+      expiresAt:
+        Date.now() +
+        (this.provisioner.keyLifetimeMs?.() ?? TAILSCALE_KEY_LIFETIME_MS),
     };
   }
 
-  async revokeMember(): Promise<void> {
-    // Ephemeral nodes purge themselves; tagged-node removal happens on teardown.
+  /**
+   * Revoke a member's tailnet node when the caller reports its device id.
+   *
+   * Tailscale exposes no user→device mapping: devices created with a tagged
+   * auth key are owned by the tailnet, not by the end user, so without a
+   * reported device id there is nothing safe to delete. In that case access is
+   * still fail-closed over time: auth keys are ephemeral and expire (TTL), and
+   * Tailscale removes ephemeral nodes when they disconnect. Immediate kick-out
+   * of an actively connected node requires a `memberId` (device id).
+   */
+  async revokeMember(
+    _key: string,
+    _userId: string,
+    _mesh?: PublicMeshInfo,
+    memberId?: string,
+  ): Promise<void> {
+    if (memberId && this.provisioner.revokeDevice) {
+      await this.provisioner.revokeDevice(memberId);
+    }
   }
 
   async teardown(key: string, _mesh?: PublicMeshInfo): Promise<void> {
@@ -354,6 +410,17 @@ export interface TailscaleApiOptions {
    */
   tag: string;
   fetchImpl?: FetchLike;
+  /**
+   * Per-request timeout in milliseconds (default
+   * {@link DEFAULT_MESH_FETCH_TIMEOUT_MS}; `0` disables the timeout).
+   */
+  timeoutMs?: number;
+  /**
+   * Lifetime requested for each auth key, in seconds. Tailscale caps this at
+   * 90 days; the default is one hour. Key expiry gates *new* joins; already
+   * connected devices are removed by device revocation or ephemeral purge.
+   */
+  keyExpirySeconds?: number;
 }
 
 /**
@@ -363,12 +430,22 @@ export interface TailscaleApiOptions {
 export class TailscaleApiProvisioner implements TailscaleProvisioner {
   private readonly fetchImpl: FetchLike;
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
+  private readonly keyExpirySeconds: number;
   /** key → (userId → issued key id), so a re-issued key can revoke its predecessor. */
   private readonly keyIds = new Map<string, Map<string, string>>();
 
   constructor(private readonly options: TailscaleApiOptions) {
     this.fetchImpl = options.fetchImpl ?? (fetch as unknown as FetchLike);
     this.baseUrl = options.baseUrl ?? "https://api.tailscale.com/api/v2";
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_MESH_FETCH_TIMEOUT_MS;
+    this.keyExpirySeconds =
+      options.keyExpirySeconds ?? TAILSCALE_KEY_LIFETIME_MS / 1000;
+  }
+
+  /** Key lifetime this provisioner requests, in milliseconds. */
+  keyLifetimeMs(): number {
+    return this.keyExpirySeconds * 1000;
   }
 
   private headers(): Record<string, string> {
@@ -403,6 +480,7 @@ export class TailscaleApiProvisioner implements TailscaleProvisioner {
     const response = await this.fetchImpl(url, {
       method: "POST",
       headers: this.headers(),
+      signal: meshFetchSignal(this.timeoutMs),
       body: JSON.stringify({
         capabilities: {
           devices: {
@@ -414,7 +492,7 @@ export class TailscaleApiProvisioner implements TailscaleProvisioner {
             },
           },
         },
-        expirySeconds: 3600,
+        expirySeconds: this.keyExpirySeconds,
         description: `drop-zerotier ${userId}`,
       }),
     });
@@ -435,10 +513,36 @@ export class TailscaleApiProvisioner implements TailscaleProvisioner {
   private async deleteKey(id: string, tolerateNotFound = false): Promise<void> {
     const response = await this.fetchImpl(
       `${this.baseUrl}/tailnet/${this.options.tailnet}/keys/${id}`,
-      { method: "DELETE", headers: this.headers() },
+      {
+        method: "DELETE",
+        headers: this.headers(),
+        signal: meshFetchSignal(this.timeoutMs),
+      },
     );
     if (!response.ok && !(tolerateNotFound && response.status === 404)) {
       throw new Error(`Tailscale key deletion failed (${response.status})`);
+    }
+  }
+
+  /**
+   * Delete a member's tailnet device (`DELETE /api/v2/device/{deviceId}`).
+   * A 404 means the device is already gone: revocation is idempotent.
+   *
+   * Callers must supply the device id reported by the joined client; Tailscale
+   * does not expose a user→device mapping through its API.
+   */
+  async revokeDevice(deviceId: string): Promise<void> {
+    if (!deviceId) return;
+    const response = await this.fetchImpl(
+      `${this.baseUrl}/device/${encodeURIComponent(deviceId)}`,
+      {
+        method: "DELETE",
+        headers: this.headers(),
+        signal: meshFetchSignal(this.timeoutMs),
+      },
+    );
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`Tailscale device deletion failed (${response.status})`);
     }
   }
 

@@ -23,6 +23,7 @@ export interface MeshNetwork {
   members: NetworkMember[];
   createdAt: number;
   expiresAt: number;
+  ownerId?: string;
 }
 
 const STATE_KEY = "networks";
@@ -44,6 +45,7 @@ function isNetwork(value: unknown): value is MeshNetwork {
     typeof network.key === "string" &&
     typeof network.createdAt === "number" &&
     typeof network.expiresAt === "number" &&
+    (network.ownerId === undefined || typeof network.ownerId === "string") &&
     Array.isArray(network.members) &&
     network.members.every(
       (member) => !!member && typeof member.userId === "string",
@@ -107,7 +109,11 @@ export class NetworkStore {
   }
 
   /** Provision (or return) the network for `key`. */
-  async ensure(key: string, ttlMs = NETWORK_TTL_MS): Promise<MeshNetwork> {
+  async ensure(
+    key: string,
+    ttlMs = NETWORK_TTL_MS,
+    ownerId?: string,
+  ): Promise<MeshNetwork> {
     return this.withLock(async () => {
       const state = await this.load();
       const existing = this.liveNetwork(state, key);
@@ -122,6 +128,7 @@ export class NetworkStore {
         members: [],
         createdAt,
         expiresAt,
+        ...(ownerId ? { ownerId } : {}),
       };
       state.networks[key] = network;
       await this.save(state);
@@ -142,20 +149,29 @@ export class NetworkStore {
     );
   }
 
-  /** Networks the user has been added to (provisioning any missing ones). */
+  /** Networks the user has been added to that are currently active and unexpired. */
   async activeForUser(userId: string): Promise<MeshNetwork[]> {
-    const keys = await this.withLock(async () => {
+    return this.withLock(async () => {
       const state = await this.load();
-      return [...(state.membership[userId] ?? [])];
-    });
-    const networks: MeshNetwork[] = [];
-    for (const key of keys) {
-      const network = await this.ensure(key);
-      if (network.members.some((member) => member.userId === userId)) {
-        networks.push(network);
+      const keys = state.membership[userId] ?? [];
+      const networks: MeshNetwork[] = [];
+      const activeKeys: string[] = [];
+      for (const key of keys) {
+        const network = this.liveNetwork(state, key);
+        if (
+          network &&
+          network.members.some((member) => member.userId === userId)
+        ) {
+          networks.push(network);
+          activeKeys.push(key);
+        }
       }
-    }
-    return networks;
+      if (activeKeys.length !== keys.length) {
+        state.membership[userId] = activeKeys;
+        await this.save(state);
+      }
+      return networks;
+    });
   }
 
   /** Add a user to a network, provisioning it if necessary. */
@@ -184,9 +200,6 @@ export class NetworkStore {
     userId: string,
     nodeId: string,
   ): Promise<NetworkMember> {
-    // Self-heal: the network may not be provisioned yet if the client reported
-    // its node before the async `mesh:member-join` handler finished.
-    await this.ensure(key);
     return this.withLock(async () => {
       const state = await this.load();
       const network = this.liveNetwork(state, key);

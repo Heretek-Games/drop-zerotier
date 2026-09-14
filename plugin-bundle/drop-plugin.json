@@ -52,11 +52,11 @@
       "zerotier-cli"
     ]
   },
-  "checksum": "c70a0d16608f4a5db5b5c5028ff8b039ea6e2e800f2902ae3e4f9522e3d7a252",
+  "checksum": "33faade8a555a99235b72fea8f88a7188c37ea6e691ce5a789633f51cbe495c2",
   "files": {
     "dist/client.js": "37eb2a6c6879de6640adcb07b36f74b1b4e2cfd555a58caf3fa5359f153e7440",
-    "dist/client.js.map": "db97c47db6668fd4fe2939712cb6b41687ba513882a55c9439dd919665d67a0f",
-    "dist/server.js": "c70a0d16608f4a5db5b5c5028ff8b039ea6e2e800f2902ae3e4f9522e3d7a252",
-    "dist/server.js.map": "ab543f08856c556858c3acf19043d4030a62f5f3e5daab21c16963186f6252af"
+    "dist/client.js.map": "ab8d9e886ddd8ab579951501e9a0b73088e2e8695210e02cab9b260b9646a790",
+    "dist/server.js": "33faade8a555a99235b72fea8f88a7188c37ea6e691ce5a789633f51cbe495c2",
+    "dist/server.js.map": "bb7e9260ac0b9d554d57b3cd3bde9c777945452a9870b1df57068a3ad9273d42"
   }
 }

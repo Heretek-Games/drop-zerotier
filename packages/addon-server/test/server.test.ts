@@ -172,3 +172,82 @@ test("plugin tears a network down on mesh:network-close", async () => {
   assert.deepEqual(active.networks, []);
   plugin.teardown();
 });
+
+test("NetworkStore activeForUser does not re-provision expired networks", async () => {
+  let currentTime = 1000;
+  const store = new NetworkStore(
+    new MockPluginStorage(),
+    new InMemoryMeshBackend(),
+    () => currentTime,
+  );
+
+  await store.addMember("expiring-room", "user-1");
+  // Fast forward past default TTL
+  currentTime += 5 * 60 * 60 * 1000;
+
+  // activeForUser should return empty and prune expired from user membership
+  const active = await store.activeForUser("user-1");
+  assert.equal(active.length, 0);
+
+  // Expired network is not re-provisioned
+  const fetched = await store.get("expiring-room");
+  assert.equal(fetched, undefined);
+});
+
+test("plugin enforces auth on GET /networks and authorization on DELETE /networks/:key", async () => {
+  const plugin = new DropZeroTierServerPlugin(
+    undefined,
+    new InMemoryMeshBackend(),
+  );
+  const ctx = new MockPluginContext("drop-zerotier");
+  plugin.init(ctx);
+
+  const getNetworksRoute = ctx.routes.get("GET /networks");
+  await assert.rejects(
+    async () => getNetworksRoute!.handler({}, { params: {}, query: {} }),
+    /Authentication required/,
+  );
+
+  const postRoute = ctx.routes.get("POST /networks");
+  await postRoute!.handler(
+    { key: "auth-room" },
+    { params: {}, query: {}, userId: "owner-user" },
+  );
+
+  const deleteRoute = ctx.routes.get("DELETE /networks/:key");
+  // 1. Unauthenticated -> 401
+  await assert.rejects(
+    async () =>
+      deleteRoute!.handler({}, { params: { key: "auth-room" }, query: {} }),
+    /Authentication required/,
+  );
+
+  // 2. Non-member / non-owner -> 403
+  await assert.rejects(
+    async () =>
+      deleteRoute!.handler(
+        {},
+        { params: { key: "auth-room" }, query: {}, userId: "attacker-user" },
+      ),
+    /Forbidden/,
+  );
+
+  // 3. Owner -> 200
+  const ownerResult = (await deleteRoute!.handler(
+    {},
+    { params: { key: "auth-room" }, query: {}, userId: "owner-user" },
+  )) as { success: boolean };
+  assert.equal(ownerResult.success, true);
+
+  // 4. Already deleted -> 404
+  await assert.rejects(
+    async () =>
+      deleteRoute!.handler(
+        {},
+        { params: { key: "auth-room" }, query: {}, userId: "owner-user" },
+      ),
+    /Network not found/,
+  );
+
+  plugin.teardown();
+});

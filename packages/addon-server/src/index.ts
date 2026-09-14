@@ -38,6 +38,30 @@ interface MemberJoinPayload {
   userId?: unknown;
 }
 
+async function getRequestBody<T = any>(event: any): Promise<T | undefined> {
+  if (event && event.body !== undefined) {
+    if (typeof event.body === "string") {
+      try {
+        return JSON.parse(event.body) as T;
+      } catch {
+        return event.body as unknown as T;
+      }
+    }
+    return event.body as T;
+  }
+  if (event && (event.node?.req || event._request)) {
+    try {
+      return (await readBody(event)) as T;
+    } catch {
+      return undefined;
+    }
+  }
+  if (event && typeof event === "object" && !event.node && !event._request) {
+    return event as T;
+  }
+  return undefined;
+}
+
 function readKeyedMembership(payload: unknown): {
   key: string;
   userId: string;
@@ -203,7 +227,13 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
     }));
 
     // Route: GET /networks
-    ctx.registerRoute("GET", "/networks", async () => {
+    ctx.registerRoute("GET", "/networks", async (_event, context) => {
+      if (!context.userId) {
+        throw createError({
+          statusCode: 401,
+          statusMessage: "Authentication required",
+        });
+      }
       await this.store.pruneExpired();
       const networks = await this.store.list();
       return { networks: networks.map(toNetworkView) };
@@ -231,7 +261,9 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
           statusMessage: "Authentication required",
         });
       }
-      const body = await readBody<{ key?: string; ttlMs?: number }>(event);
+      const body = await getRequestBody<{ key?: string; ttlMs?: number }>(
+        event,
+      );
       if (typeof body?.key !== "string" || body.key.length === 0) {
         throw createError({
           statusCode: 400,
@@ -251,6 +283,7 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
         const network = await this.store.ensure(
           body.key,
           body.ttlMs ?? NETWORK_TTL_MS,
+          context.userId,
         );
         ctx.broadcast(MESH_EVENT_NETWORK, {
           type: "network_created",
@@ -269,6 +302,12 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
 
     // Route: GET /networks/:key
     ctx.registerRoute("GET", "/networks/:key", async (_event, context) => {
+      if (!context.userId) {
+        throw createError({
+          statusCode: 401,
+          statusMessage: "Authentication required",
+        });
+      }
       const network = await this.store.get(context.params.key);
       if (!network) {
         throw createError({
@@ -328,7 +367,7 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
             statusMessage: "Authentication required",
           });
         }
-        const body = await readBody<{ memberId?: string }>(event);
+        const body = await getRequestBody<{ memberId?: string }>(event);
         if (!isMeshMemberId(body?.memberId)) {
           throw createError({
             statusCode: 400,
@@ -400,6 +439,25 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
         throw createError({
           statusCode: 401,
           statusMessage: "Authentication required",
+        });
+      }
+      const network = await this.store.get(context.params.key);
+      if (!network) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: "Network not found",
+        });
+      }
+      const isAdmin =
+        Boolean(context.userAcls?.includes("admin")) ||
+        Boolean(context.userAcls?.includes("plugin:admin"));
+      const isOwner = network.ownerId === context.userId;
+      const isMember = network.members.some((m) => m.userId === context.userId);
+      if (!isAdmin && !isOwner && !isMember) {
+        throw createError({
+          statusCode: 403,
+          statusMessage:
+            "Forbidden: only members, owner, or admins may tear down this network",
         });
       }
       await this.store.teardown(context.params.key);

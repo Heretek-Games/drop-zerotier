@@ -8,10 +8,7 @@
  * it leaves the networks again (fail-closed revocation happens server-side).
  */
 
-import type {
-  ClientPlugin,
-  ClientPluginContext,
-} from "@droposs/plugin-sdk";
+import type { ClientPlugin, ClientPluginContext } from "@droposs/plugin-sdk";
 import { joinNetwork, leaveNetwork } from "./zerotier-cli.js";
 
 export {

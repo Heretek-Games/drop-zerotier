@@ -236,9 +236,7 @@ export class NetworkStore {
       const state = await this.load();
       const network = state.networks[key];
       if (network) {
-        const member = network.members.find(
-          (entry) => entry.userId === userId,
-        );
+        const member = network.members.find((entry) => entry.userId === userId);
         network.members = network.members.filter(
           (entry) => entry.userId !== userId,
         );

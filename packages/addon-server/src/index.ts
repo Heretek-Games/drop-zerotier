@@ -105,10 +105,9 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
   ) {}
 
   init(ctx: PluginContext): void {
-    this.backend =
-      this.backendOverride ??
-      resolveBackend();
-    this.store = this.storeOverride ?? new NetworkStore(ctx.storage, this.backend);
+    this.backend = this.backendOverride ?? resolveBackend();
+    this.store =
+      this.storeOverride ?? new NetworkStore(ctx.storage, this.backend);
 
     ctx.logger.info(`drop-zerotier mesh backend: ${this.backend.id}`);
 
@@ -133,9 +132,7 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
           });
         })
         .catch((err) => {
-          ctx.logger.warn(
-            `Failed to add mesh member: ${String(err)}`,
-          );
+          ctx.logger.warn(`Failed to add mesh member: ${String(err)}`);
         });
     });
 
@@ -152,9 +149,7 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
           });
         })
         .catch((err) => {
-          ctx.logger.warn(
-            `Failed to remove mesh member: ${String(err)}`,
-          );
+          ctx.logger.warn(`Failed to remove mesh member: ${String(err)}`);
         });
     });
 
@@ -285,38 +280,42 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
     });
 
     // Route: POST /networks/:key/join — self-service membership + join info.
-    ctx.registerRoute("POST", "/networks/:key/join", async (_event, context) => {
-      if (!context.userId) {
-        throw createError({
-          statusCode: 401,
-          statusMessage: "Authentication required",
-        });
-      }
-      try {
-        const network = await this.store.addMember(
-          context.params.key,
-          context.userId,
-        );
-        return {
-          network: toNetworkView(network),
-          join: {
-            backend: network.mesh.backend,
-            ...(network.mesh.backend === "zerotier"
-              ? {
-                  networkId: network.mesh.networkId,
-                  cidr: network.mesh.cidr,
-                }
-              : { aclTag: network.mesh.aclTag }),
-          },
-        };
-      } catch (err) {
-        ctx.logger.warn(`Failed to join mesh network: ${String(err)}`);
-        throw createError({
-          statusCode: 404,
-          statusMessage: "Network not found",
-        });
-      }
-    });
+    ctx.registerRoute(
+      "POST",
+      "/networks/:key/join",
+      async (_event, context) => {
+        if (!context.userId) {
+          throw createError({
+            statusCode: 401,
+            statusMessage: "Authentication required",
+          });
+        }
+        try {
+          const network = await this.store.addMember(
+            context.params.key,
+            context.userId,
+          );
+          return {
+            network: toNetworkView(network),
+            join: {
+              backend: network.mesh.backend,
+              ...(network.mesh.backend === "zerotier"
+                ? {
+                    networkId: network.mesh.networkId,
+                    cidr: network.mesh.cidr,
+                  }
+                : { aclTag: network.mesh.aclTag }),
+            },
+          };
+        } catch (err) {
+          ctx.logger.warn(`Failed to join mesh network: ${String(err)}`);
+          throw createError({
+            statusCode: 404,
+            statusMessage: "Network not found",
+          });
+        }
+      },
+    );
 
     // Route: POST /networks/:key/member — report a joined node id.
     ctx.registerRoute(

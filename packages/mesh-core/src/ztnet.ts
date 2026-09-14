@@ -1,8 +1,4 @@
-import {
-  allocateMemberAddress,
-  type FetchLike,
-  networkCidr,
-} from "./mesh.js";
+import { allocateMemberAddress, type FetchLike, networkCidr } from "./mesh.js";
 import type { IssuedCredential, MeshBackend, PublicMeshInfo } from "./types.js";
 
 export interface ZtnetBackendOptions {
@@ -217,8 +213,7 @@ export class ZtnetBackend implements MeshBackend {
       },
     );
 
-    const networkMembers =
-      this.memberIds.get(key) ?? new Map<string, string>();
+    const networkMembers = this.memberIds.get(key) ?? new Map<string, string>();
     networkMembers.set(userId, memberId);
     this.memberIds.set(key, networkMembers);
 

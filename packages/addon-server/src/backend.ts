@@ -35,7 +35,8 @@ export function resolveBackend(
       `unknown MESH_BACKEND '${selected}' (expected ztnet, zerotier, tailscale or memory)`,
     );
   }
-  const selectedOr = (name: BackendName) => selected === "" || selected === name;
+  const selectedOr = (name: BackendName) =>
+    selected === "" || selected === name;
 
   // ZTNET-managed controller is the default path.
   const ztnetUrl = env.ZTNET_URL;

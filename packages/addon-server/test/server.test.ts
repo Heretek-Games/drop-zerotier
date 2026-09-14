@@ -5,10 +5,7 @@ import {
   networkCidr,
   type MeshBackend,
 } from "@heretek-games/zerotier-mesh";
-import {
-  MockPluginContext,
-  MockPluginStorage,
-} from "@droposs/plugin-sdk";
+import { MockPluginContext, MockPluginStorage } from "@droposs/plugin-sdk";
 import { DropZeroTierServerPlugin } from "../src/index.js";
 import { NetworkStore } from "../src/network-store.js";
 
@@ -31,11 +28,7 @@ test("NetworkStore provisions idempotently by key", async () => {
 test("NetworkStore authorizes a member and records the address", async () => {
   const store = makeStore();
   await store.addMember("room-2", "user-1");
-  const member = await store.authorizeMember(
-    "room-2",
-    "user-1",
-    "abcdef0123",
-  );
+  const member = await store.authorizeMember("room-2", "user-1", "abcdef0123");
   assert.equal(member.nodeId, "abcdef0123");
   assert.ok(member.address, "address should be assigned");
 });
@@ -57,10 +50,10 @@ test("NetworkStore activeForUser tracks membership index", async () => {
   await store.addMember("room-b", "user-1");
   await store.addMember("room-c", "user-2");
   const active = await store.activeForUser("user-1");
-  assert.deepEqual(
-    active.map((network) => network.key).sort(),
-    ["room-a", "room-b"],
-  );
+  assert.deepEqual(active.map((network) => network.key).sort(), [
+    "room-a",
+    "room-b",
+  ]);
 });
 
 test("NetworkStore removeMember drops membership and revokes", async () => {
@@ -96,7 +89,10 @@ test("plugin registers its routes and reports the backend", async () => {
   assert.ok(ctx.routes.has("DELETE /networks/:key"));
 
   const backendRoute = ctx.routes.get("GET /backend");
-  const result = (await backendRoute!.handler({}, { params: {}, query: {} })) as {
+  const result = (await backendRoute!.handler(
+    {},
+    { params: {}, query: {} },
+  )) as {
     backend: string;
   };
   assert.equal(result.backend, "zerotier");
@@ -124,7 +120,10 @@ test("plugin join route adds the caller and returns join info", async () => {
     {},
     { params: {}, query: {}, userId: "user-1" },
   )) as { networks: Array<{ key: string }> };
-  assert.deepEqual(active.networks.map((n) => n.key), ["room-x"]);
+  assert.deepEqual(
+    active.networks.map((n) => n.key),
+    ["room-x"],
+  );
   plugin.teardown();
 });
 
@@ -144,7 +143,10 @@ test("plugin reacts to mesh:member-join events from consumers", async () => {
     {},
     { params: {}, query: {}, userId: "user-9" },
   )) as { networks: Array<{ key: string }> };
-  assert.deepEqual(active.networks.map((n) => n.key), ["room-gse"]);
+  assert.deepEqual(
+    active.networks.map((n) => n.key),
+    ["room-gse"],
+  );
   plugin.teardown();
 });
 

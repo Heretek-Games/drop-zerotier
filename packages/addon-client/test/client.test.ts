@@ -52,11 +52,11 @@ function makeContext() {
 }
 
 test("parseNodeId extracts the address from zerotier-cli info", () => {
+  assert.equal(parseNodeId("200 info abcdef0123 1.12.2 ONLINE"), "abcdef0123");
   assert.equal(
-    parseNodeId("200 info abcdef0123 1.12.2 ONLINE"),
-    "abcdef0123",
+    parseNodeId("200 info deadbeef01 1.14.0 ONLINE\n"),
+    "deadbeef01",
   );
-  assert.equal(parseNodeId("200 info deadbeef01 1.14.0 ONLINE\n"), "deadbeef01");
   assert.equal(parseNodeId("200 info not-a-node ONLINE"), undefined);
   assert.equal(parseNodeId(""), undefined);
 });

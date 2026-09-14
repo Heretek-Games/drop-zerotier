@@ -83,9 +83,7 @@ test("ZtnetBackend uses the org API and pre-authorizes a node id", async () => {
   );
   assert.equal(address, "10.242.1.20");
   assert.ok(
-    calls.some((call) =>
-      call.url.includes("/member/abcdef0123"),
-    ),
+    calls.some((call) => call.url.includes("/member/abcdef0123")),
     "member modification should be requested",
   );
 });

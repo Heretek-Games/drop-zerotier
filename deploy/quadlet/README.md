@@ -27,11 +27,11 @@ Supports both **system-wide** (`/etc/containers/systemd/`) and **rootless user**
 
 ### Components
 
-| Unit                      | Container Name  | Internal IP     | Host Port   | Purpose                                            |
-| :------------------------ | :-------------- | :-------------- | :---------- | :------------------------------------------------- |
-| `drop-network.network`    | —               | `172.20.0.0/16` | —           | User-defined bridge network with DNS resolution    |
-| `drop-postgres.container` | `drop-postgres` | `172.20.0.21`   | _None_      | PostgreSQL 15 for Drop                             |
-| `drop.container`          | `drop`          | `172.20.0.20`   | `3000:3000` | Web UI, REST API, WebSocket pub/sub, chunk depot   |
+| Unit                      | Container Name  | Internal IP     | Host Port   | Purpose                                          |
+| :------------------------ | :-------------- | :-------------- | :---------- | :----------------------------------------------- |
+| `drop-network.network`    | —               | `172.20.0.0/16` | —           | User-defined bridge network with DNS resolution  |
+| `drop-postgres.container` | `drop-postgres` | `172.20.0.21`   | _None_      | PostgreSQL 15 for Drop                           |
+| `drop.container`          | `drop`          | `172.20.0.20`   | `3000:3000` | Web UI, REST API, WebSocket pub/sub, chunk depot |
 
 The multiplayer mesh is **not** bundled. Install the `drop-zerotier` plugin and
 point it at a ZTNET controller you operate (see the plugin README).

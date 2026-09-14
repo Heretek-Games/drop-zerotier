@@ -21,13 +21,13 @@ not bundle or host a controller.
 
 ## Components
 
-| Package | Purpose |
-| :--- | :--- |
+| Package                                                | Purpose                                                                                                                                                                                                                    |
+| :----------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/mesh-core/` (`@heretek-games/zerotier-mesh`) | Transport-only `MeshBackend` implementations: `ZtnetBackend`, `ZeroTierBackend`, `TailscaleBackend`, `InMemoryMeshBackend`, plus deterministic address allocation. Consumed in-process by `drop-gse` and the server addon. |
-| `packages/addon-server/` | Drop server plugin: network lifecycle, membership, REST routes, WebSocket channel and event-bus coordination. |
-| `packages/addon-client/` | Drop desktop client addon: `pre-launch:network` / `post-exit:cleanup` hooks that join/leave ZeroTier networks. |
-| `plugin-bundle/` | Assembled `drop-plugin.json` + signed server/client bundles (`.dropplugin`). |
-| `deploy/quadlet/` | Base Drop + PostgreSQL Podman Quadlet deployment template (no controller bundled). |
+| `packages/addon-server/`                               | Drop server plugin: network lifecycle, membership, REST routes, WebSocket channel and event-bus coordination.                                                                                                              |
+| `packages/addon-client/`                               | Drop desktop client addon: `pre-launch:network` / `post-exit:cleanup` hooks that join/leave ZeroTier networks.                                                                                                             |
+| `plugin-bundle/`                                       | Assembled `drop-plugin.json` + signed server/client bundles (`.dropplugin`).                                                                                                                                               |
+| `deploy/quadlet/`                                      | Base Drop + PostgreSQL Podman Quadlet deployment template (no controller bundled).                                                                                                                                         |
 
 ## Bring your own ZTNET
 

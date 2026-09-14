@@ -1,6 +1,6 @@
 {
   "name": "@heretek-games/zerotier-mesh",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Transport-only mesh backends (ZTNET, ZeroTier, Tailscale) for Drop",
   "license": "GPL-3.0-or-later",
   "type": "module",

@@ -247,7 +247,7 @@ export class ZeroTierBackend implements MeshBackend {
     const networkId = this.networkIdFor(key, mesh);
     if (!networkId) return undefined;
     const response = await this.fetchImpl(
-      `${this.options.baseUrl}/network/${encodeURIComponent(networkId)}/member/${encodeURIComponent(memberId)}`,
+      `${this.options.baseUrl}/controller/network/${encodeURIComponent(networkId)}/member/${encodeURIComponent(memberId)}`,
       {
         method: "POST",
         headers: this.headers(),
@@ -283,7 +283,7 @@ export class ZeroTierBackend implements MeshBackend {
     if (!networkId || !nodeId) return;
     this.memberIds.get(key)?.delete(userId);
     const response = await this.fetchImpl(
-      `${this.options.baseUrl}/network/${encodeURIComponent(networkId)}/member/${encodeURIComponent(nodeId)}`,
+      `${this.options.baseUrl}/controller/network/${encodeURIComponent(networkId)}/member/${encodeURIComponent(nodeId)}`,
       {
         method: "POST",
         headers: this.headers(),

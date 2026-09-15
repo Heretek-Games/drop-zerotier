@@ -24,7 +24,7 @@
     "@droposs/plugin-cli": "file:../drop-plugin-sdk/packages/plugin-cli",
     "@types/node": "^22.0.0",
     "prettier": "^3.5.0",
-    "typescript": "^5.7.2",
+    "typescript": "^7.0.2",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.1",
     "typescript-eslint": "^8.68.0"

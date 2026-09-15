@@ -277,9 +277,9 @@ test("Tailscale credential expiry follows the configured key TTL", async () => {
 });
 
 test("ZeroTierBackend member authorize/revoke use the /controller path", async () => {
-  const calls: string[] = [];
+  const calls: Array<{ url: string; method: string; body?: string }> = [];
   const fetchImpl: FetchLike = async (url, init) => {
-    calls.push(`${init?.method ?? "GET"} ${url}`);
+    calls.push({ url, method: init?.method ?? "GET", body: init?.body });
     if (init?.method === "POST" && /______$/.test(url)) {
       return {
         ok: true,
@@ -307,10 +307,30 @@ test("ZeroTierBackend member authorize/revoke use the /controller path", async (
   await backend.authorizeMember("room-1", "user-1", "member-1", mesh);
   await backend.revokeMember("room-1", "user-1", mesh, "member-1");
 
-  assert.ok(
-    calls.includes(
-      "POST http://localhost:9993/controller/network/8056c2e21c000001/member/member-1",
-    ),
-    `expected /controller member path; got:\n${calls.join("\n")}`,
+  const memberUrl =
+    "http://localhost:9993/controller/network/8056c2e21c000001/member/member-1";
+  const memberCalls = calls.filter((call) => call.url === memberUrl);
+  const trace = calls
+    .map((call) => `${call.method} ${call.url} ${call.body ?? ""}`)
+    .join("\n");
+
+  assert.equal(
+    memberCalls.length,
+    2,
+    `expected exactly two /controller member calls; got:\n${trace}`,
+  );
+
+  const [authorizeCall, revokeCall] = memberCalls;
+  assert.equal(authorizeCall.method, "POST");
+  assert.deepEqual(
+    JSON.parse(authorizeCall.body ?? "null"),
+    { authorized: true },
+    `expected the authorize call to send {"authorized":true}; got:\n${trace}`,
+  );
+  assert.equal(revokeCall.method, "POST");
+  assert.deepEqual(
+    JSON.parse(revokeCall.body ?? "null"),
+    { authorized: false },
+    `expected the revoke call to send {"authorized":false}; got:\n${trace}`,
   );
 });

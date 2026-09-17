@@ -1,15 +1,42 @@
 #!/usr/bin/env node
 /* global process, console */
 
-import { readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
+import {
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+  existsSync,
+} from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 
 const LEGACY_SCOPE = "@droposs";
 const NEW_SCOPE = "@drop-oss";
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist-package", "dist-packages"]);
-const LOCKFILES = new Set(["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb", "deno.lock"]);
-const TEXT_EXT = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".yml", ".yaml"]);
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist-package",
+  "dist-packages",
+]);
+const LOCKFILES = new Set([
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "bun.lockb",
+  "deno.lock",
+]);
+const TEXT_EXT = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".md",
+  ".yml",
+  ".yaml",
+]);
 
 const configPath = path.resolve(process.cwd(), ".sdk-scope.json");
 if (!existsSync(configPath)) {
@@ -19,7 +46,9 @@ if (!existsSync(configPath)) {
 const config = JSON.parse(readFileSync(configPath, "utf-8"));
 const scope = config.sdk;
 if (scope !== NEW_SCOPE && scope !== LEGACY_SCOPE) {
-  console.error(`Unknown scope '${scope}'; .sdk-scope.json sdk must be '${NEW_SCOPE}' or '${LEGACY_SCOPE}'`);
+  console.error(
+    `Unknown scope '${scope}'; .sdk-scope.json sdk must be '${NEW_SCOPE}' or '${LEGACY_SCOPE}'`,
+  );
   process.exit(1);
 }
 const sdkVersion = config["sdkVersion"];
@@ -59,7 +88,12 @@ function rewritePackageJson(file, text) {
   } catch {
     return text;
   }
-  for (const sectionName of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+  for (const sectionName of [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+  ]) {
     const section = pkg[sectionName];
     if (!section) continue;
     const rebuilt = {};
@@ -118,9 +152,15 @@ const installDir = process.cwd();
 
 if (existsSync(path.join(installDir, "package-lock.json"))) {
   try {
-    execSync("npm install --no-audit --no-fund", { cwd: installDir, stdio: "inherit" });
+    execSync("npm install --no-audit --no-fund", {
+      cwd: installDir,
+      stdio: "inherit",
+    });
   } catch {
-    execSync("npm install --no-audit --no-fund --legacy-peer-deps", { cwd: installDir, stdio: "inherit" });
+    execSync("npm install --no-audit --no-fund --legacy-peer-deps", {
+      cwd: installDir,
+      stdio: "inherit",
+    });
   }
 } else if (existsSync(path.join(installDir, "pnpm-lock.yaml"))) {
   execSync("pnpm install", { cwd: installDir, stdio: "inherit" });

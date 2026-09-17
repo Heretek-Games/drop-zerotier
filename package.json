@@ -21,7 +21,7 @@
     "lint": "eslint ."
   },
   "devDependencies": {
-    "@droposs/plugin-cli": "file:../drop-plugin-sdk/packages/plugin-cli",
+    "@droposs/plugin-cli": "^0.5.9",
     "@types/node": "^22.0.0",
     "prettier": "^3.5.0",
     "typescript": "^5.7.2",

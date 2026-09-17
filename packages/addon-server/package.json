@@ -17,7 +17,7 @@
     "@droposs/plugin-sdk": "^0.6.1"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.5.1",
     "h3": "^1.15.0",
     "typescript": "^5.7.2"
   }

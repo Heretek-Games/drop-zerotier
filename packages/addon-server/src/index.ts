@@ -36,6 +36,7 @@ export const MESH_EVENT_MEMBER = "mesh:member";
 interface MemberJoinPayload {
   key?: unknown;
   userId?: unknown;
+  gameId?: unknown;
 }
 
 async function getRequestBody<T = any>(event: any): Promise<T | undefined> {
@@ -65,6 +66,7 @@ async function getRequestBody<T = any>(event: any): Promise<T | undefined> {
 function readKeyedMembership(payload: unknown): {
   key: string;
   userId: string;
+  gameId?: string;
 } | null {
   const data = (payload ?? {}) as MemberJoinPayload;
   if (
@@ -75,7 +77,14 @@ function readKeyedMembership(payload: unknown): {
   ) {
     return null;
   }
-  return { key: data.key, userId: data.userId };
+  return {
+    key: data.key,
+    userId: data.userId,
+    gameId:
+      typeof data.gameId === "string" && data.gameId.length > 0
+        ? data.gameId
+        : undefined,
+  };
 }
 
 /** Member-visible view: peer node ids are revocation handles, so redact them. */
@@ -90,6 +99,7 @@ function toNetworkView(network: MeshNetwork) {
     })),
     createdAt: network.createdAt,
     expiresAt: network.expiresAt,
+    ...(network.gameId ? { gameId: network.gameId } : {}),
   };
 }
 
@@ -146,13 +156,14 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
       const membership = readKeyedMembership(payload);
       if (!membership) return;
       void this.store
-        .addMember(membership.key, membership.userId)
+        .addMember(membership.key, membership.userId, membership.gameId)
         .then((network) => {
           ctx.broadcast(MESH_EVENT_NETWORK, {
             type: "member_joined",
             key: membership.key,
             userId: membership.userId,
             mesh: network.mesh,
+            ...(network.gameId ? { gameId: network.gameId } : {}),
           });
         })
         .catch((err) => {
@@ -201,7 +212,12 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
         return;
       }
       try {
-        const networks = await this.store.activeForUser(wsCtx.userId);
+        const gameId =
+          typeof (message as any)?.gameId === "string" &&
+          (message as any).gameId.length > 0
+            ? (message as any).gameId
+            : undefined;
+        const networks = await this.store.activeForUser(wsCtx.userId, gameId);
         wsCtx.send({
           ok: true,
           networks: networks.map(toNetworkView),
@@ -249,7 +265,12 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
         });
       }
       await this.store.pruneExpired();
-      const networks = await this.store.activeForUser(context.userId);
+      const gameId =
+        typeof context.query?.gameId === "string" &&
+        context.query.gameId.length > 0
+          ? context.query.gameId
+          : undefined;
+      const networks = await this.store.activeForUser(context.userId, gameId);
       return { networks: networks.map(toNetworkView) };
     });
 
@@ -261,9 +282,11 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
           statusMessage: "Authentication required",
         });
       }
-      const body = await getRequestBody<{ key?: string; ttlMs?: number }>(
-        event,
-      );
+      const body = await getRequestBody<{
+        key?: string;
+        ttlMs?: number;
+        gameId?: string;
+      }>(event);
       if (typeof body?.key !== "string" || body.key.length === 0) {
         throw createError({
           statusCode: 400,
@@ -284,11 +307,15 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
           body.key,
           body.ttlMs ?? NETWORK_TTL_MS,
           context.userId,
+          typeof body.gameId === "string" && body.gameId.length > 0
+            ? body.gameId
+            : undefined,
         );
         ctx.broadcast(MESH_EVENT_NETWORK, {
           type: "network_created",
           key: network.key,
           mesh: network.mesh,
+          ...(network.gameId ? { gameId: network.gameId } : {}),
         });
         return { network: toNetworkView(network) };
       } catch (err) {
@@ -322,17 +349,21 @@ export class DropZeroTierServerPlugin implements ServerPlugin {
     ctx.registerRoute(
       "POST",
       "/networks/:key/join",
-      async (_event, context) => {
+      async (event, context) => {
         if (!context.userId) {
           throw createError({
             statusCode: 401,
             statusMessage: "Authentication required",
           });
         }
+        const body = await getRequestBody<{ gameId?: string }>(event);
         try {
           const network = await this.store.addMember(
             context.params.key,
             context.userId,
+            typeof body?.gameId === "string" && body.gameId.length > 0
+              ? body.gameId
+              : undefined,
           );
           return {
             network: toNetworkView(network),

@@ -19,12 +19,7 @@
     "storage",
     "websocket",
     "events",
-    "network",
-    "game:launch-hook",
-    "client:storage",
-    "client:ws",
-    "system:command",
-    "ui:slot"
+    "network"
   ],
   "server": {
     "source": "../packages/addon-server/dist/src/index.js",
@@ -44,7 +39,6 @@
     "capabilities": [
       "game:launch-hook",
       "client:storage",
-      "client:ws",
       "system:command",
       "ui:slot"
     ],
@@ -52,11 +46,11 @@
       "zerotier-cli"
     ]
   },
-  "checksum": "b93eb41af3caaebc14fa48d0ed5523fe48a57a34ddbe2c11439ec9566241fbce",
+  "checksum": "f9e58102c725e3fd3f4e5cf4251c97f98de809693d26bb353eb825f62782fd77",
   "files": {
-    "dist/client.js": "37eb2a6c6879de6640adcb07b36f74b1b4e2cfd555a58caf3fa5359f153e7440",
-    "dist/client.js.map": "ab8d9e886ddd8ab579951501e9a0b73088e2e8695210e02cab9b260b9646a790",
-    "dist/server.js": "b93eb41af3caaebc14fa48d0ed5523fe48a57a34ddbe2c11439ec9566241fbce",
-    "dist/server.js.map": "36689044b9419e7ca510285c503503fda8a15594b336c5626cb82c3141162b54"
+    "dist/client.js": "58c83f09822585f326743c96e65f865f9a23d532f8945ec99478e2cc4aad81b3",
+    "dist/client.js.map": "76ea501feb5b9f1e618da9f06e6cd5c0bf6f9920162caf4507ba84ac742f689f",
+    "dist/server.js": "f9e58102c725e3fd3f4e5cf4251c97f98de809693d26bb353eb825f62782fd77",
+    "dist/server.js.map": "e8a73b196b264fcb0606c4ba4c20fe0ec11b9f40aa1e7ec63de07efa024ee65e"
   }
 }

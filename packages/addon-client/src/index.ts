@@ -8,7 +8,11 @@
  * it leaves the networks again (fail-closed revocation happens server-side).
  */
 
-import type { ClientPlugin, ClientPluginContext } from "@droposs/plugin-sdk";
+import type {
+  ClientPlugin,
+  ClientPluginContext,
+  LaunchContext,
+} from "@droposs/plugin-sdk";
 import { joinNetwork, leaveNetwork } from "./zerotier-cli.js";
 
 export {
@@ -33,11 +37,13 @@ export interface NetworkView {
   members: Array<{ userId: string; address?: string; joinedAt: number }>;
   createdAt: number;
   expiresAt: number;
+  gameId?: string;
 }
 
 interface StoredJoin {
   key: string;
   networkId: string;
+  gameId?: string;
 }
 
 export class DropZeroTierClientPlugin implements ClientPlugin {
@@ -53,7 +59,6 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
     capabilities: [
       "game:launch-hook" as const,
       "client:storage" as const,
-      "client:ws" as const,
       "system:command" as const,
       "ui:slot" as const,
     ],
@@ -63,19 +68,33 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
     ctx.registerLaunchHook({
       stage: "pre-launch:network",
       order: 10,
-      execute: () => this.joinActiveNetworks(ctx),
+      execute: (launch?: LaunchContext) => this.joinActiveNetworks(ctx, launch),
     });
     ctx.registerLaunchHook({
       stage: "post-exit:cleanup",
       order: 10,
-      execute: () => this.leaveActiveNetworks(ctx),
+      execute: (launch?: LaunchContext) => this.leaveActiveNetworks(ctx, launch),
     });
 
     ctx.registerSlot(
       "game-detail:badges",
       {
-        template:
-          '<span class="text-xs text-zinc-400">Mesh network available</span>',
+        render() {
+          const g = globalThis as Record<string, any>;
+          const vue = g.Vue ?? g.window?.Vue;
+          if (typeof vue?.h === "function") {
+            return vue.h(
+              "span",
+              { class: "text-xs text-zinc-400" },
+              "Mesh network available",
+            );
+          }
+          return {
+            type: "span",
+            props: { class: "text-xs text-zinc-400" },
+            children: "Mesh network available",
+          };
+        },
       },
       { label: "ZeroTier", order: 40 },
     );
@@ -87,13 +106,15 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
    */
   private async activeNetworks(
     ctx: ClientPluginContext,
+    gameId?: string,
     attempts = 3,
   ): Promise<NetworkView[]> {
+    const query = gameId ? `?gameId=${encodeURIComponent(gameId)}` : "";
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
         const res = await ctx.serverRequest<{ networks: NetworkView[] }>(
           "GET",
-          "/networks/active",
+          `/networks/active${query}`,
         );
         const networks = res?.networks ?? [];
         if (networks.length > 0 || attempt === attempts - 1) return networks;
@@ -111,9 +132,15 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
   }
 
   /** Join every active ZeroTier network and report this node's id. */
-  private async joinActiveNetworks(ctx: ClientPluginContext): Promise<void> {
-    const networks = await this.activeNetworks(ctx);
-    const joined: StoredJoin[] = [];
+  private async joinActiveNetworks(
+    ctx: ClientPluginContext,
+    launch?: LaunchContext,
+  ): Promise<void> {
+    const gameId = launch?.gameId;
+    const networks = await this.activeNetworks(ctx, gameId);
+    const previouslyJoined =
+      (await ctx.storage.get<StoredJoin[]>(ACTIVE_NETWORKS_KEY)) ?? [];
+    const newlyJoined: StoredJoin[] = [];
 
     for (const network of networks) {
       if (network.mesh.backend !== "zerotier") {
@@ -129,7 +156,11 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
           `/networks/${encodeURIComponent(network.key)}/member`,
           { memberId: id },
         );
-        joined.push({ key: network.key, networkId: network.mesh.networkId });
+        newlyJoined.push({
+          key: network.key,
+          networkId: network.mesh.networkId,
+          ...(gameId ? { gameId } : {}),
+        });
         ctx.logger.info(`Joined mesh network ${network.key} as ${id}`);
       } catch (err) {
         ctx.logger.warn(
@@ -138,14 +169,32 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
       }
     }
 
-    await ctx.storage.set(ACTIVE_NETWORKS_KEY, joined);
+    const merged = [
+      ...previouslyJoined.filter(
+        (prev) => !newlyJoined.some((curr) => curr.key === prev.key),
+      ),
+      ...newlyJoined,
+    ];
+    await ctx.storage.set(ACTIVE_NETWORKS_KEY, merged);
   }
 
-  /** Leave everything joined for this session. */
-  private async leaveActiveNetworks(ctx: ClientPluginContext): Promise<void> {
+  /** Leave networks joined for this game session. */
+  private async leaveActiveNetworks(
+    ctx: ClientPluginContext,
+    launch?: LaunchContext,
+  ): Promise<void> {
+    const gameId = launch?.gameId;
     const joined =
       (await ctx.storage.get<StoredJoin[]>(ACTIVE_NETWORKS_KEY)) ?? [];
-    for (const entry of joined) {
+
+    const toLeave = gameId
+      ? joined.filter((entry) => entry.gameId === gameId || !entry.gameId)
+      : joined;
+    const toKeep = gameId
+      ? joined.filter((entry) => entry.gameId && entry.gameId !== gameId)
+      : [];
+
+    for (const entry of toLeave) {
       try {
         await leaveNetwork(ctx, entry.networkId);
       } catch (err) {
@@ -154,7 +203,12 @@ export class DropZeroTierClientPlugin implements ClientPlugin {
         );
       }
     }
-    await ctx.storage.delete(ACTIVE_NETWORKS_KEY).catch(() => {});
+
+    if (toKeep.length > 0) {
+      await ctx.storage.set(ACTIVE_NETWORKS_KEY, toKeep);
+    } else {
+      await ctx.storage.delete(ACTIVE_NETWORKS_KEY).catch(() => {});
+    }
   }
 }
 

@@ -298,3 +298,20 @@ test("plugin enforces auth on GET /networks and authorization on DELETE /network
 
   plugin.teardown();
 });
+
+test("NetworkStore isolates active networks by gameId", async () => {
+  const store = makeStore();
+  await store.addMember("game1-net", "user-1", "game-alpha");
+  await store.addMember("game2-net", "user-1", "game-beta");
+  await store.addMember("global-net", "user-1");
+
+  const alphaActive = await store.activeForUser("user-1", "game-alpha");
+  assert.deepEqual(alphaActive.map((n) => n.key).sort(), ["game1-net", "global-net"]);
+
+  const betaActive = await store.activeForUser("user-1", "game-beta");
+  assert.deepEqual(betaActive.map((n) => n.key).sort(), ["game2-net", "global-net"]);
+
+  const allActive = await store.activeForUser("user-1");
+  assert.deepEqual(allActive.map((n) => n.key).sort(), ["game1-net", "game2-net", "global-net"]);
+});
+

@@ -24,6 +24,7 @@ export interface MeshNetwork {
   createdAt: number;
   expiresAt: number;
   ownerId?: string;
+  gameId?: string;
 }
 
 const STATE_KEY = "networks";
@@ -46,6 +47,7 @@ function isNetwork(value: unknown): value is MeshNetwork {
     typeof network.createdAt === "number" &&
     typeof network.expiresAt === "number" &&
     (network.ownerId === undefined || typeof network.ownerId === "string") &&
+    (network.gameId === undefined || typeof network.gameId === "string") &&
     Array.isArray(network.members) &&
     network.members.every(
       (member) => !!member && typeof member.userId === "string",
@@ -113,11 +115,18 @@ export class NetworkStore {
     key: string,
     ttlMs = NETWORK_TTL_MS,
     ownerId?: string,
+    gameId?: string,
   ): Promise<MeshNetwork> {
     return this.withLock(async () => {
       const state = await this.load();
       const existing = this.liveNetwork(state, key);
-      if (existing) return existing;
+      if (existing) {
+        if (gameId && !existing.gameId) {
+          existing.gameId = gameId;
+          await this.save(state);
+        }
+        return existing;
+      }
 
       const createdAt = this.now();
       const expiresAt = createdAt + ttlMs;
@@ -129,6 +138,7 @@ export class NetworkStore {
         createdAt,
         expiresAt,
         ...(ownerId ? { ownerId } : {}),
+        ...(gameId ? { gameId } : {}),
       };
       state.networks[key] = network;
       await this.save(state);
@@ -150,7 +160,7 @@ export class NetworkStore {
   }
 
   /** Networks the user has been added to that are currently active and unexpired. */
-  async activeForUser(userId: string): Promise<MeshNetwork[]> {
+  async activeForUser(userId: string, gameId?: string): Promise<MeshNetwork[]> {
     return this.withLock(async () => {
       const state = await this.load();
       const keys = state.membership[userId] ?? [];
@@ -162,8 +172,10 @@ export class NetworkStore {
           network &&
           network.members.some((member) => member.userId === userId)
         ) {
-          networks.push(network);
           activeKeys.push(key);
+          if (!gameId || network.gameId === gameId || !network.gameId) {
+            networks.push(network);
+          }
         }
       }
       if (activeKeys.length !== keys.length) {
@@ -175,8 +187,12 @@ export class NetworkStore {
   }
 
   /** Add a user to a network, provisioning it if necessary. */
-  async addMember(key: string, userId: string): Promise<MeshNetwork> {
-    await this.ensure(key);
+  async addMember(
+    key: string,
+    userId: string,
+    gameId?: string,
+  ): Promise<MeshNetwork> {
+    await this.ensure(key, NETWORK_TTL_MS, undefined, gameId);
     return this.withLock(async () => {
       const state = await this.load();
       const network = this.liveNetwork(state, key);

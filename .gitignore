@@ -8,3 +8,5 @@ plugin-bundle/dist/
 plugin-bundle/dist-package/
 dist-packages/
 *.tsbuildinfo
+--out/
+dist-package/

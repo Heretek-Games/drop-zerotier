@@ -121,7 +121,7 @@ export class NetworkStore {
       const state = await this.load();
       const existing = this.liveNetwork(state, key);
       if (existing) {
-        if (gameId && !existing.gameId) {
+        if (gameId && !existing.gameId && (!existing.ownerId || existing.ownerId === ownerId)) {
           existing.gameId = gameId;
           await this.save(state);
         }

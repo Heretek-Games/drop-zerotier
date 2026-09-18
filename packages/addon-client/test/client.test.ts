@@ -14,7 +14,7 @@ function makeContext() {
     "system:command",
     "ui:slot",
   ]);
-  ctx.serverRequestLog.setResponse("GET", "/networks/active", {
+  const activeNetworks = {
     networks: [
       {
         key: "room-1",
@@ -29,7 +29,9 @@ function makeContext() {
         expiresAt: Date.now() + 60_000,
       },
     ],
-  });
+  };
+  ctx.serverRequestLog.setResponse("GET", "/networks/active", activeNetworks);
+  ctx.serverRequestLog.setResponse("GET", "/networks/active?gameId=g1", activeNetworks);
   ctx.serverRequestLog.setResponse("POST", "/networks/room-1/member", {
     address: "10.242.1.20",
   });
@@ -111,7 +113,7 @@ test("missing system:command capability is rejected", async () => {
     "client:storage",
     "ui:slot",
   ]);
-  ctx.serverRequestLog.setResponse("GET", "/networks/active", {
+  const activeNetworks = {
     networks: [
       {
         key: "room-1",
@@ -126,7 +128,9 @@ test("missing system:command capability is rejected", async () => {
         expiresAt: Date.now() + 60_000,
       },
     ],
-  });
+  };
+  ctx.serverRequestLog.setResponse("GET", "/networks/active", activeNetworks);
+  ctx.serverRequestLog.setResponse("GET", "/networks/active?gameId=g1", activeNetworks);
   plugin.init(ctx);
 
   const hook = ctx.launchHooks.find((h) => h.stage === "pre-launch:network");
